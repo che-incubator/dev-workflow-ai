@@ -23,6 +23,7 @@ import {
   DropdownList,
   EmptyState,
   EmptyStateBody,
+  EmptyStateVariant,
   Flex,
   FlexItem,
   Label,
@@ -40,7 +41,7 @@ import {
   ToolbarItem,
   Tooltip,
 } from '@patternfly/react-core';
-import { EllipsisVIcon, TrashIcon } from '@patternfly/react-icons';
+import { CubesIcon, EllipsisVIcon, TrashIcon } from '@patternfly/react-icons';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@patternfly/react-table';
 import { useAlerts } from '../contexts/AlertContext.js';
 import {
@@ -276,11 +277,10 @@ function IssuesSourcesSection({
             </FlexItem>
           </Flex>
         ) : filtered.length === 0 ? (
-          <EmptyState>
+          <EmptyState variant={EmptyStateVariant.sm} icon={CubesIcon}
+            titleText={sources.length === 0 ? 'No sources yet.' : 'No sources match the filter.'}>
             <EmptyStateBody>
-              {sources.length === 0
-                ? 'No sources yet. Add a GitHub or Jira URL above.'
-                : 'No sources match the filter.'}
+              {sources.length === 0 ? 'Add a GitHub or Jira URL above.' : ''}
             </EmptyStateBody>
           </EmptyState>
         ) : (
@@ -544,8 +544,8 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
         </Toolbar>
 
         {queue.length === 0 ? (
-          <EmptyState>
-            <EmptyStateBody>No issues queued. Add an issue URL above.</EmptyStateBody>
+          <EmptyState variant={EmptyStateVariant.sm} icon={CubesIcon} titleText="No issues queued.">
+            <EmptyStateBody>Add an issue URL above.</EmptyStateBody>
           </EmptyState>
         ) : (
           <Table id="queue-table" aria-label="Issue queue" variant="compact">
@@ -800,11 +800,10 @@ function AllIssuesSection({
             </FlexItem>
           </Flex>
         ) : filtered.length === 0 ? (
-          <EmptyState>
+          <EmptyState variant={EmptyStateVariant.sm} icon={CubesIcon}
+            titleText={issues.length === 0 ? 'No issues yet.' : 'No issues match the current filter.'}>
             <EmptyStateBody>
-              {issues.length === 0
-                ? 'No issues yet — add a source and sync it.'
-                : 'No issues match the current filter.'}
+              {issues.length === 0 ? 'Add a source and sync it.' : ''}
             </EmptyStateBody>
           </EmptyState>
         ) : (
