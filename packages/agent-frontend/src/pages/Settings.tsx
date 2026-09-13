@@ -886,7 +886,7 @@ function AutorunWidget({
                 isDisabled={starting}
                 onClick={() => void handleForceStart()}
               >
-                {starting ? <><Spinner size="sm" /> Starting…</> : '▶ Force start now'}
+                {starting ? <><Spinner size="sm" /> Starting…</> : 'Force start now'}
               </Button>
             </FlexItem>
           </Flex>

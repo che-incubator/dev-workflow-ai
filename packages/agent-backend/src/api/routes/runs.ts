@@ -387,23 +387,42 @@ export const runsRoutes: FastifyPluginAsync = async app => {
     if (!issue) return reply.status(404).send({ error: 'No open issues available for autorun' });
 
     const issueUrl = issue.url;
-    const ghParsed = parseIssueUrl(issueUrl);
-    if (!ghParsed) return reply.status(400).send({ error: `Cannot parse issue URL: ${issueUrl}` });
-
-    const repoKey = `${ghParsed.owner}/${ghParsed.repo}`;
-    const project = REPO_TO_PROJECT[repoKey] ?? ghParsed.repo;
     const dryRun = !process.env.GITHUB_TOKEN;
     const resolvedOutputDir = process.env.OUTPUT_DIR ?? 'output';
     const threadId = randomUUID();
 
+    // Support both GitHub and Jira issue URLs
+    const ghParsed = parseIssueUrl(issueUrl);
+    const jiraParsed = ghParsed ? null : parseJiraUrl(issueUrl);
+
+    if (!ghParsed && !jiraParsed) {
+      return reply.status(400).send({ error: `Cannot parse issue URL: ${issueUrl}` });
+    }
+
+    let project: string;
+    let repoKey: string | undefined;
+    let issueNumber: number | null = null;
+    let jiraKey: string | undefined;
+
+    if (ghParsed) {
+      repoKey = `${ghParsed.owner}/${ghParsed.repo}`;
+      project = REPO_TO_PROJECT[repoKey] ?? ghParsed.repo;
+      issueNumber = ghParsed.number;
+    } else {
+      jiraKey = jiraParsed!.key;
+      project = (await projectForJiraKey(jiraKey)) ?? jiraKey.split('-')[0].toLowerCase();
+      repoKey = undefined;
+    }
+
     await db.query(
       `INSERT INTO agent_runs (thread_id, project_slug, repo, issue_number, issue_url, status)
        VALUES ($1, $2, $3, $4, $5, 'running')`,
-      [threadId, project, repoKey, ghParsed.number, issueUrl],
+      [threadId, project, repoKey ?? '', issueNumber, issueUrl],
     );
 
     runAgentInBackground(
-      threadId, project, ghParsed.number, false, dryRun, resolvedOutputDir, repoKey, issueUrl,
+      threadId, project, issueNumber, false, dryRun, resolvedOutputDir,
+      repoKey, issueUrl, jiraKey,
     ).catch(e => console.error(`[autorun ${threadId}] Unhandled error:`, e));
 
     console.log(`[autorun] Started run ${threadId} for issue: ${issueUrl}`);

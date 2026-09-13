@@ -8,6 +8,21 @@ import { db } from '../db/client.js';
 import { getSetting } from '../db/settingsHelper.js';
 import { runAgentInBackground } from '../api/routes/runs.js';
 
+function parseJiraUrl(url: string): { key: string } | null {
+  const m = url.match(/\/browse\/([A-Z]+-\d+)/i);
+  return m ? { key: m[1].toUpperCase() } : null;
+}
+
+async function projectForJiraKey(key: string): Promise<string | null> {
+  const { rows } = await db.query<{ project_slug: string }>(
+    `SELECT s.project_slug FROM issues si
+       JOIN issue_sources s ON si.source_id = s.id
+      WHERE si.external_id = $1 AND s.project_slug <> '' LIMIT 1`,
+    [key],
+  );
+  return rows[0]?.project_slug ?? null;
+}
+
 // Track last triggered HH:MM so we don't fire twice in the same minute
 let lastTriggeredAt: string | null = null;
 
@@ -27,28 +42,42 @@ async function triggerAutorun(): Promise<void> {
     return;
   }
 
-  // Parse owner/repo/number from GitHub URL
-  const m = issue.url.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
-  if (!m) {
-    console.log(`[autorun] Cannot parse issue URL: ${issue.url} — skipping`);
-    return;
-  }
-
-  const [, owner, repo, numStr] = m;
-  const repoKey = `${owner}/${repo}`;
-  const issueNumber = parseInt(numStr, 10);
-  const project = repo;
+  const issueUrl = issue.url;
   const dryRun = !process.env.GITHUB_TOKEN;
   const outputDir = process.env.OUTPUT_DIR ?? 'output';
   const threadId = randomUUID();
 
+  // Support GitHub and Jira URLs
+  const ghMatch = issueUrl.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
+  const jiraParsed = ghMatch ? null : parseJiraUrl(issueUrl);
+
+  if (!ghMatch && !jiraParsed) {
+    console.log(`[autorun] Cannot parse issue URL: ${issueUrl} — skipping`);
+    return;
+  }
+
+  let project: string;
+  let repoKey: string | undefined;
+  let issueNumber: number | null = null;
+  let jiraKey: string | undefined;
+
+  if (ghMatch) {
+    const [, owner, repo, numStr] = ghMatch;
+    repoKey = `${owner}/${repo}`;
+    project = repo;
+    issueNumber = parseInt(numStr, 10);
+  } else {
+    jiraKey = jiraParsed!.key;
+    project = (await projectForJiraKey(jiraKey)) ?? jiraKey.split('-')[0].toLowerCase();
+  }
+
   await db.query(
     `INSERT INTO agent_runs (thread_id, project_slug, repo, issue_number, issue_url, status)
      VALUES ($1, $2, $3, $4, $5, 'running')`,
-    [threadId, project, repoKey, issueNumber, issue.url],
+    [threadId, project, repoKey ?? '', issueNumber, issueUrl],
   );
 
-  runAgentInBackground(threadId, project, issueNumber, false, dryRun, outputDir, repoKey, issue.url)
+  runAgentInBackground(threadId, project, issueNumber, false, dryRun, outputDir, repoKey, issueUrl, jiraKey)
     .catch(e => console.error(`[autorun ${threadId}] Unhandled error:`, e));
 
   console.log(`[autorun] Scheduled run ${threadId} started for: ${issue.url}`);
