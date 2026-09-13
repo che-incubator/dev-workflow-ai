@@ -211,6 +211,7 @@ function AppShell() {
   return (
     <>
       <Page
+        isManagedSidebar={false}
         masthead={masthead}
         sidebar={
           <PageSidebar isSidebarOpen={sidebarOpen}>
