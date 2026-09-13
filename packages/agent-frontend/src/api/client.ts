@@ -104,6 +104,15 @@ export const addSource = (url: string, projectSlug?: string) =>
 export const deleteSource = (id: number) => apiFetch<void>(`/sources/${id}`, { method: 'DELETE' });
 export const syncSource = (id: number) =>
   apiFetch<{ syncing: boolean }>(`/sources/${id}/sync`, { method: 'POST' });
+
+export const syncJiraAssigned = (sourceId?: number) =>
+  apiFetch<{ sourceId: number; upserted: number }>('/sources/jira/sync-assigned', {
+    method: 'POST',
+    body: sourceId != null ? JSON.stringify({ sourceId }) : '{}',
+  });
+
+export const isJiraAssignedUrl = (url: string) =>
+  url.includes('/jira/for-you');
 export const getAllIssues = () => apiFetch<StoredIssue[]>('/sources/issues');
 export const deleteIssue = (id: number) =>
   apiFetch<void>(`/sources/issues/${id}`, { method: 'DELETE' });

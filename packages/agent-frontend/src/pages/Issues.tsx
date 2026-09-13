@@ -55,6 +55,8 @@ import {
   startRun,
   StoredIssue,
   syncSource,
+  syncJiraAssigned,
+  isJiraAssignedUrl,
 } from '../api/client.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────
@@ -159,12 +161,18 @@ function IssuesSourcesSection({
     }
   }
 
-  async function handleSync(id: number): Promise<void> {
-    setSyncing(id);
+  async function handleSync(src: IssueSource): Promise<void> {
+    setSyncing(src.id);
     try {
-      await syncSource(id);
-      addAlert('info', 'Sync started — issues will appear shortly');
-      setTimeout(onReload, 4000);
+      if (isJiraAssignedUrl(src.url)) {
+        const result = await syncJiraAssigned(src.id);
+        addAlert('success', `Synced ${result.upserted} assigned Jira issues`);
+        onReload();
+      } else {
+        await syncSource(src.id);
+        addAlert('info', 'Sync started — issues will appear shortly');
+        setTimeout(onReload, 4000);
+      }
     } catch (e) {
       addAlert('danger', e instanceof Error ? e.message : 'Sync failed');
     } finally {
@@ -329,7 +337,7 @@ function IssuesSourcesSection({
                       popperProps={{ position: 'right' }}
                     >
                       <DropdownList>
-                        <DropdownItem onClick={() => { void handleSync(src.id); setOpenKebab(null); }}>
+                        <DropdownItem onClick={() => { void handleSync(src); setOpenKebab(null); }}>
                           {syncing === src.id ? 'Syncing…' : 'Sync'}
                         </DropdownItem>
                         <DropdownItem isDanger onClick={() => { void handleDeleteOne(src.id); setOpenKebab(null); }}>

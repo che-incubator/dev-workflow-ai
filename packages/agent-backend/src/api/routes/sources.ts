@@ -361,8 +361,13 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
     if (!rows[0]) return reply.status(404).send({ error: 'Source not found' });
 
     const source = rows[0];
-    // Sync in background
-    syncSource(source).catch(e => console.error(`[sync ${source.id}] Error:`, e));
+
+    // Jira "assigned to me" sources use a dedicated sync path
+    if (source.url.includes('/jira/for-you')) {
+      syncJiraAssigned(source).catch(e => console.error(`[jira-assigned ${source.id}] Error:`, e));
+    } else {
+      syncSource(source).catch(e => console.error(`[sync ${source.id}] Error:`, e));
+    }
 
     return reply.send({ syncing: true, sourceId: source.id });
   });
@@ -498,6 +503,128 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
     return reply.status(400).send({ error: 'URL must be a GitHub issue or Jira browse URL' });
   });
 
+  // POST /api/sources/jira/sync-assigned — fetch all Jira issues assigned to the current user
+  // Triggered when a source URL ends with /jira/for-you?tab=assigned
+  app.post('/jira/sync-assigned', {
+    schema: {
+      tags,
+      body: {
+        type: ['object', 'null'],
+        properties: {
+          sourceId: { type: 'number', description: 'IssueSource id to associate with (auto-created if omitted)' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const jiraToken = process.env.JIRA_TOKEN ?? process.env.JIRA_API_TOKEN;
+    const jiraEmail = process.env.JIRA_EMAIL;
+    const jiraBase  = process.env.JIRA_BASE_URL ?? 'https://redhat.atlassian.net';
+
+    if (!jiraToken || !jiraEmail) {
+      return reply.status(400).send({ error: 'JIRA_TOKEN and JIRA_EMAIL env vars required' });
+    }
+
+    const sourceUrl = `${jiraBase}/jira/for-you?tab=assigned`;
+    const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+
+    // Ensure the source row exists
+    const body = req.body as { sourceId?: number } | null;
+    let sourceId: number = body?.sourceId ?? 0;
+
+    if (!sourceId) {
+      const { rows: [src] } = await db.query<IssueSourceRow>(
+        `INSERT INTO issue_sources (url, kind, label, project_slug)
+         VALUES ($1, 'jira', 'Assigned to me', '')
+         ON CONFLICT (url) DO UPDATE SET label = EXCLUDED.label RETURNING *`,
+        [sourceUrl],
+      );
+      sourceId = src.id;
+    }
+
+    // Fetch all assigned-to-me issues via Jira v3 POST search API
+    const jql = 'assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC';
+    let startAt = 0;
+    const maxResults = 100;
+    let total = Infinity;
+    let upserted = 0;
+
+    while (startAt < total) {
+      const res = await fetch(`${jiraBase}/rest/api/3/search/jql`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${auth}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jql,
+          maxResults,
+          startAt,
+          fields: ['summary', 'description', 'status', 'priority', 'labels', 'issuetype', 'updated', 'assignee'],
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        return reply.status(res.status).send({ error: `Jira API error: ${res.status}`, detail: text.slice(0, 300) });
+      }
+
+      const data = await res.json() as {
+        issues: Array<{
+          key: string;
+          fields: {
+            summary: string;
+            description?: unknown;
+            status?: { name: string };
+            priority?: { name: string };
+            labels?: string[];
+            issuetype?: { name: string };
+            updated?: string;
+          };
+        }>;
+      };
+
+      total = data.issues.length < maxResults ? startAt + data.issues.length : startAt + maxResults + 1;
+
+      for (const issue of data.issues) {
+        const { key, fields } = issue;
+        const issueUrl = `${jiraBase}/browse/${key}`;
+        const title = fields.summary;
+        const statusName = (fields.status?.name ?? 'open').toLowerCase();
+        const status = statusName === 'done' || statusName === 'closed' || statusName === 'resolved' ? 'closed' : 'open';
+        const rawPriority = (fields.priority?.name ?? '').toLowerCase();
+        const priority = rawPriority.includes('critical') ? 'critical'
+          : rawPriority.includes('major') || rawPriority.includes('high') ? 'major'
+          : rawPriority.includes('minor') || rawPriority.includes('medium') ? 'minor'
+          : rawPriority.includes('trivial') || rawPriority.includes('low') ? 'trivial'
+          : '';
+
+        await db.query(
+          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, raw, fetched_at)
+           VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, now())
+           ON CONFLICT (source_id, external_id) DO UPDATE SET
+             title = EXCLUDED.title, labels = EXCLUDED.labels,
+             status = EXCLUDED.status, priority = EXCLUDED.priority,
+             raw = EXCLUDED.raw, fetched_at = now()`,
+          [sourceId, key, title, issueUrl, fields.labels ?? [],
+           status, priority, JSON.stringify(fields)],
+        );
+        upserted++;
+      }
+
+      if (data.issues.length < maxResults) break;
+      startAt += maxResults;
+    }
+
+    await db.query(
+      'UPDATE issue_sources SET last_synced_at = now() WHERE id = $1',
+      [sourceId],
+    );
+
+    console.log(`[jira-assigned] Synced ${upserted} issues into source ${sourceId}`);
+    return reply.send({ sourceId, upserted });
+  });
+
   // DELETE /api/sources/issues/:issueId — remove a single stored issue
   app.delete<{ Params: { issueId: string } }>('/issues/:issueId', { schema: { tags } }, async (req, reply) => {
     await db.query('DELETE FROM issues WHERE id = $1', [parseInt(req.params.issueId, 10)]);
@@ -522,6 +649,90 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
 };
 
 // ── Background sync ────────────────────────────────────────────────────────
+
+// ── Background sync for Jira "assigned to me" sources ─────────────────────
+
+async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
+  const jiraToken = process.env.JIRA_TOKEN ?? process.env.JIRA_API_TOKEN;
+  const jiraEmail = process.env.JIRA_EMAIL;
+  const jiraBase  = process.env.JIRA_BASE_URL ?? 'https://redhat.atlassian.net';
+
+  if (!jiraToken || !jiraEmail) {
+    console.error('[jira-assigned] JIRA_TOKEN and JIRA_EMAIL env vars required');
+    return;
+  }
+
+  const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+  const jql = 'assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC';
+  let startAt = 0;
+  const maxResults = 100;
+  let upserted = 0;
+
+  while (true) {
+    const res = await fetch(`${jiraBase}/rest/api/3/search/jql`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        jql, maxResults, startAt,
+        fields: ['summary', 'status', 'priority', 'labels', 'issuetype', 'updated'],
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(`[jira-assigned] Jira API error: ${res.status}`);
+      return;
+    }
+
+    const data = await res.json() as {
+      issues: Array<{
+        key: string;
+        fields: {
+          summary: string;
+          status?: { name: string };
+          priority?: { name: string };
+          labels?: string[];
+        };
+      }>;
+    };
+
+    for (const issue of data.issues) {
+      const { key, fields } = issue;
+      const issueUrl = `${jiraBase}/browse/${key}`;
+      const statusName = (fields.status?.name ?? '').toLowerCase();
+      const status = ['done', 'closed', 'resolved'].includes(statusName) ? 'closed' : 'open';
+      const rawPriority = (fields.priority?.name ?? '').toLowerCase();
+      const priority = rawPriority.includes('critical') ? 'critical'
+        : rawPriority.includes('major') || rawPriority.includes('high') ? 'major'
+        : rawPriority.includes('minor') || rawPriority.includes('medium') ? 'minor'
+        : rawPriority.includes('trivial') || rawPriority.includes('low') ? 'trivial'
+        : '';
+
+      await db.query(
+        `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, raw, fetched_at)
+         VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, now())
+         ON CONFLICT (source_id, external_id) DO UPDATE SET
+           title = EXCLUDED.title, labels = EXCLUDED.labels,
+           status = EXCLUDED.status, priority = EXCLUDED.priority,
+           raw = EXCLUDED.raw, fetched_at = now()`,
+        [source.id, key, fields.summary, issueUrl, fields.labels ?? [],
+         status, priority, JSON.stringify(fields)],
+      );
+      upserted++;
+    }
+
+    if (data.issues.length < maxResults) break;
+    startAt += maxResults;
+  }
+
+  await db.query('UPDATE issue_sources SET last_synced_at = now() WHERE id = $1', [source.id]);
+  console.log(`[jira-assigned] Synced ${upserted} issues for source ${source.id}`);
+}
+
+// ── Background sync for GitHub / generic Jira project sources ─────────────
 
 async function syncSource(source: IssueSourceRow): Promise<void> {
   console.log(`[sync] Starting sync for ${source.kind} source: ${source.label} (id=${source.id})`);
