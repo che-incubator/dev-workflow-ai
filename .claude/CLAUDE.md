@@ -15,6 +15,9 @@ Review runs on the local branch diff **before** the PR is opened. Blocking findi
 Rules and context for each subproject live in `pg_seed/eclipse-che/subprojects/<name>/`. Shared skills
 live in `.claude/skills/`. Pre-loaded ecosystem knowledge: `pg_seed/eclipse-che/context/eclipse-che-ecosystem.md`.
 
+**CVE rule**: Security / CVE issues always take priority (score floor 40). When 2–9 open CVE issues exist,
+use `/batch-cve-fix` to combine them into one PR. See `pg_seed/eclipse-che/shared/rules/cve-batch.md`.
+
 ## Available Skills (Claude Code `/skill-name`)
 
 Shared skills — in `.claude/skills/` (mirrored from `shared/skills/`):

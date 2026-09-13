@@ -10,6 +10,17 @@ argument-hint: "[project-name] (e.g., che-dashboard)"
 
 A project name matching a key in `rules.json` → `projects`. If `$ARGUMENTS` is empty, ask the user.
 
+## CVE Priority Override
+
+**Before** running the normal filter, check for CVE/Security issues:
+
+- Any issue with label `Security` or title containing `CVE-YYYY-NNNNN` gets **score ≥ 40** and **priority: critical**.
+- These issues are always selected before any other type, regardless of story-point budget.
+- If 2–9 CVE issues exist: do **not** use this skill — use `/batch-cve-fix` instead.
+- If exactly 1 CVE issue exists: skip to Step 4 and select it directly.
+
+---
+
 ## Workflow
 
 ### 1. Run filter-issues

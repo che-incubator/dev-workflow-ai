@@ -35,6 +35,37 @@ cat ./rules.json | \
 
 Do not proceed to Phase 2 until all four files are read.
 
+### Phase 1.5: CVE Batch Check (run before Phase 2)
+
+Before picking a single issue, check if a batch CVE fix is warranted:
+
+```bash
+# Count open CVE/Security issues for this project:
+curl -s "http://localhost:3000/api/sources/issues?status=open&limit=50" | \
+  python3 -c "
+import sys, json
+issues = json.load(sys.stdin)
+cves = [i for i in issues if
+  'Security' in (i.get('labels') or []) or
+  'security' in (i.get('labels') or []) or
+  'CVE-' in i.get('title','')]
+print(len(cves))
+"
+```
+
+- **0 CVE issues**: continue to Phase 2 (normal pick).
+- **1 CVE issue**: continue to Phase 2 — it will be picked first (highest score).
+- **2–9 CVE issues**: run batch fix instead of Phase 2:
+  ```
+  /batch-cve-fix $ARGUMENTS
+  ```
+  After the batch run completes, the loop is done for this session.
+- **≥10 CVE issues**: run `/batch-cve-fix` (handles first 9), then repeat.
+
+See `shared/rules/cve-batch.md` for the full batch specification.
+
+---
+
 ### Phase 2: Pick Issue
 
 Run the `pick-issue` skill:
