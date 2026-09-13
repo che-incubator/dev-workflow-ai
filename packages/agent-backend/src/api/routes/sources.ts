@@ -552,14 +552,22 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
       sourceId = src.id;
     }
 
-    // Fetch all assigned-to-me issues via Jira v3 POST search API
-    const jql = 'assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC';
-    let startAt = 0;
+    // Fetch assigned-to-me open issues (To Do / New only — skip In Progress and Done)
+    // Uses Jira REST API v3 /search/jql (POST) with cursor-based pagination (nextPageToken).
+    // Note: startAt is NOT valid for this endpoint; use nextPageToken instead.
+    const jql = 'assignee = currentUser() AND resolution = Unresolved AND statusCategory = "To Do" ORDER BY updated DESC';
     const maxResults = 100;
-    let total = Infinity;
     let upserted = 0;
+    let nextPageToken: string | undefined;
 
-    while (startAt < total) {
+    while (true) {
+      const bodyPayload: Record<string, unknown> = {
+        jql,
+        maxResults,
+        fields: ['summary', 'status', 'priority', 'labels', 'issuetype', 'updated'],
+      };
+      if (nextPageToken) bodyPayload.nextPageToken = nextPageToken;
+
       const res = await fetch(`${jiraBase}/rest/api/3/search/jql`, {
         method: 'POST',
         headers: {
@@ -567,12 +575,7 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
           Accept: 'application/json',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          jql,
-          maxResults,
-          startAt,
-          fields: ['summary', 'description', 'status', 'priority', 'labels', 'issuetype', 'updated', 'assignee'],
-        }),
+        body: JSON.stringify(bodyPayload),
       });
 
       if (!res.ok) {
@@ -585,24 +588,18 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
           key: string;
           fields: {
             summary: string;
-            description?: unknown;
             status?: { name: string };
             priority?: { name: string };
             labels?: string[];
-            issuetype?: { name: string };
-            updated?: string;
           };
         }>;
+        nextPageToken?: string;
       };
-
-      total = data.issues.length < maxResults ? startAt + data.issues.length : startAt + maxResults + 1;
 
       for (const issue of data.issues) {
         const { key, fields } = issue;
         const issueUrl = `${jiraBase}/browse/${key}`;
         const title = fields.summary;
-        const statusName = (fields.status?.name ?? 'open').toLowerCase();
-        const status = statusName === 'done' || statusName === 'closed' || statusName === 'resolved' ? 'closed' : 'open';
         const rawPriority = (fields.priority?.name ?? '').toLowerCase();
         const priority = rawPriority.includes('critical') ? 'critical'
           : rawPriority.includes('major') || rawPriority.includes('high') ? 'major'
@@ -614,19 +611,19 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
 
         await db.query(
           `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, raw, fetched_at)
-           VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, $9, now())
+           VALUES ($1, $2, $3, $4, '', $5, 'open', $6, $7, $8, now())
            ON CONFLICT (source_id, external_id) DO UPDATE SET
              title = EXCLUDED.title, labels = EXCLUDED.labels,
-             status = EXCLUDED.status, priority = EXCLUDED.priority,
+             status = 'open', priority = EXCLUDED.priority,
              score = EXCLUDED.score, raw = EXCLUDED.raw, fetched_at = now()`,
           [sourceId, key, title, issueUrl, fields.labels ?? [],
-           status, priority, issScore, JSON.stringify(fields)],
+           priority, issScore, JSON.stringify(fields)],
         );
         upserted++;
       }
 
-      if (data.issues.length < maxResults) break;
-      startAt += maxResults;
+      if (!data.nextPageToken || data.issues.length < maxResults) break;
+      nextPageToken = data.nextPageToken;
     }
 
     await db.query(
@@ -676,12 +673,21 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
   }
 
   const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
-  const jql = 'assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC';
-  let startAt = 0;
+  // Only "To Do" / "New" issues — skip In Progress and Done.
+  // Uses cursor-based pagination (nextPageToken), not startAt.
+  const jql = 'assignee = currentUser() AND resolution = Unresolved AND statusCategory = "To Do" ORDER BY updated DESC';
   const maxResults = 100;
   let upserted = 0;
+  let nextPageToken: string | undefined;
 
   while (true) {
+    const bodyPayload: Record<string, unknown> = {
+      jql,
+      maxResults,
+      fields: ['summary', 'status', 'priority', 'labels', 'issuetype', 'updated'],
+    };
+    if (nextPageToken) bodyPayload.nextPageToken = nextPageToken;
+
     const res = await fetch(`${jiraBase}/rest/api/3/search/jql`, {
       method: 'POST',
       headers: {
@@ -689,10 +695,7 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        jql, maxResults, startAt,
-        fields: ['summary', 'status', 'priority', 'labels', 'issuetype', 'updated'],
-      }),
+      body: JSON.stringify(bodyPayload),
     });
 
     if (!res.ok) {
@@ -710,13 +713,12 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
           labels?: string[];
         };
       }>;
+      nextPageToken?: string;
     };
 
     for (const issue of data.issues) {
       const { key, fields } = issue;
       const issueUrl = `${jiraBase}/browse/${key}`;
-      const statusName = (fields.status?.name ?? '').toLowerCase();
-      const status = ['done', 'closed', 'resolved'].includes(statusName) ? 'closed' : 'open';
       const rawPriority = (fields.priority?.name ?? '').toLowerCase();
       const priority = rawPriority.includes('critical') ? 'critical'
         : rawPriority.includes('major') || rawPriority.includes('high') ? 'major'
@@ -728,19 +730,19 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
 
       await db.query(
         `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, raw, fetched_at)
-         VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, $9, now())
+         VALUES ($1, $2, $3, $4, '', $5, 'open', $6, $7, $8, now())
          ON CONFLICT (source_id, external_id) DO UPDATE SET
            title = EXCLUDED.title, labels = EXCLUDED.labels,
-           status = EXCLUDED.status, priority = EXCLUDED.priority,
+           status = 'open', priority = EXCLUDED.priority,
            score = EXCLUDED.score, raw = EXCLUDED.raw, fetched_at = now()`,
         [source.id, key, fields.summary, issueUrl, fields.labels ?? [],
-         status, priority, issueScore, JSON.stringify(fields)],
+         priority, issueScore, JSON.stringify(fields)],
       );
       upserted++;
     }
 
-    if (data.issues.length < maxResults) break;
-    startAt += maxResults;
+    if (!data.nextPageToken || data.issues.length < maxResults) break;
+    nextPageToken = data.nextPageToken;
   }
 
   await db.query('UPDATE issue_sources SET last_synced_at = now() WHERE id = $1', [source.id]);
