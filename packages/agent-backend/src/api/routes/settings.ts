@@ -23,28 +23,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { readdir, stat } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { db } from '../../db/client.js';
+import { getSetting, setSetting } from '../../db/settingsHelper.js';
 
 const ROOT = resolve(process.cwd());
 const SAMPLES_DIR = join(ROOT, 'target');
 
-// ── DB settings helpers ────────────────────────────────────────────────────
-// Note: the `settings` table is created via migrations.ts, not here.
-
-async function getSetting(key: string, defaultValue: string): Promise<string> {
-  const { rows } = await db.query<{ value: string }>('SELECT value FROM settings WHERE key = $1', [
-    key,
-  ]);
-  return rows[0]?.value ?? defaultValue;
-}
-
-async function setSetting(key: string, value: string): Promise<void> {
-  await db.query(
-    `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, now())
-     ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()`,
-    [key, value],
-  );
-}
+export { getSetting, setSetting };
 
 // ── List available sample directories ─────────────────────────────────────
 

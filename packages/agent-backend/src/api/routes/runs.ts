@@ -87,7 +87,7 @@ const REPO_TO_PROJECT: Record<string, string> = {
   'che-incubator/dash-licenses': 'dash-licenses',
 };
 
-async function runAgentInBackground(
+export async function runAgentInBackground(
   threadId: string,
   project: string,
   issueNumber: number | null,
@@ -369,5 +369,44 @@ export const runsRoutes: FastifyPluginAsync = async app => {
       await db.query('DELETE FROM agent_runs WHERE thread_id = $1', [threadId]);
     }
     return reply.status(204).send();
+  });
+
+  // POST /autorun — pick the top-scored open issue and start a run
+  app.post('/autorun', { schema: { tags } }, async (_req, reply) => {
+    const { rows: issueRows } = await db.query<{ url: string; title: string }>(
+      `SELECT si.url, si.title
+         FROM issues si
+         LEFT JOIN agent_runs r
+           ON r.issue_url = si.url AND r.status = 'running'
+        WHERE si.status = 'open' AND r.id IS NULL
+        ORDER BY si.score DESC
+        LIMIT 1`,
+    );
+
+    const issue = issueRows[0];
+    if (!issue) return reply.status(404).send({ error: 'No open issues available for autorun' });
+
+    const issueUrl = issue.url;
+    const ghParsed = parseIssueUrl(issueUrl);
+    if (!ghParsed) return reply.status(400).send({ error: `Cannot parse issue URL: ${issueUrl}` });
+
+    const repoKey = `${ghParsed.owner}/${ghParsed.repo}`;
+    const project = REPO_TO_PROJECT[repoKey] ?? ghParsed.repo;
+    const dryRun = !process.env.GITHUB_TOKEN;
+    const resolvedOutputDir = process.env.OUTPUT_DIR ?? 'output';
+    const threadId = randomUUID();
+
+    await db.query(
+      `INSERT INTO agent_runs (thread_id, project_slug, repo, issue_number, issue_url, status)
+       VALUES ($1, $2, $3, $4, $5, 'running')`,
+      [threadId, project, repoKey, ghParsed.number, issueUrl],
+    );
+
+    runAgentInBackground(
+      threadId, project, ghParsed.number, false, dryRun, resolvedOutputDir, repoKey, issueUrl,
+    ).catch(e => console.error(`[autorun ${threadId}] Unhandled error:`, e));
+
+    console.log(`[autorun] Started run ${threadId} for issue: ${issueUrl}`);
+    return reply.status(202).send({ threadId, issueUrl, title: issue.title, dryRun });
   });
 };

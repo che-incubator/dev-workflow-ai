@@ -47,6 +47,7 @@ import {
   SelectList,
   SelectOption,
   Spinner,
+  Switch,
   TextArea,
   TextInput,
   Title,
@@ -74,6 +75,7 @@ import {
   saveSettings,
   testAllProviders,
   testProvider,
+  triggerAutorun,
   upsertProvider,
 } from '../api/client.js';
 
@@ -757,12 +759,130 @@ function KnowledgeSources() {
 
 // ── Main Settings page ─────────────────────────────────────────────────────
 
+// ── Autorun widget ─────────────────────────────────────────────────────────
+
+function AutorunWidget({
+  settings,
+  set,
+  addAlert,
+}: {
+  settings: AppSettings;
+  set: (patch: Partial<AppSettings>) => void;
+  addAlert: (variant: 'success' | 'danger' | 'info', msg: string) => void;
+}) {
+  const enabled = settings.autorunEnabled === 'true';
+  const times = settings.autorunTimes
+    ? settings.autorunTimes.split(',').map(t => t.trim()).filter(Boolean)
+    : [];
+  const [starting, setStarting] = React.useState(false);
+
+  function setTimes(newTimes: string[]) {
+    set({ autorunTimes: newTimes.join(',') });
+  }
+
+  function addTime() {
+    setTimes([...times, '09:00']);
+  }
+
+  function removeTime(idx: number) {
+    setTimes(times.filter((_, i) => i !== idx));
+  }
+
+  function updateTime(idx: number, val: string) {
+    setTimes(times.map((t, i) => (i === idx ? val : t)));
+  }
+
+  async function handleForceStart() {
+    setStarting(true);
+    try {
+      const result = await triggerAutorun();
+      addAlert('success', `Autorun started: ${result.title || result.issueUrl}`);
+    } catch (e) {
+      addAlert('danger', e instanceof Error ? e.message : 'Autorun failed');
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  return (
+    <PageSection>
+      <Card>
+        <CardTitle>
+          Daily Autorun
+          <p style={WIDGET_DESC}>Automatically pick and run one issue at scheduled times each day.</p>
+        </CardTitle>
+        <CardBody>
+          <Flex direction={{ default: 'column' }} gap={{ default: 'gapMd' }}>
+            {/* Enable switch */}
+            <FlexItem>
+              <Switch
+                id="autorun-enabled"
+                label="Enabled"
+                labelOff="Disabled"
+                isChecked={enabled}
+                onChange={(_e, checked) => set({ autorunEnabled: checked ? 'true' : 'false' })}
+              />
+            </FlexItem>
+
+            {/* Scheduled times */}
+            {enabled && (
+              <FlexItem>
+                <Flex direction={{ default: 'column' }} gap={{ default: 'gapSm' }}>
+                  <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>Scheduled times (HH:MM):</span>
+                  {times.map((t, idx) => (
+                    <Flex key={idx} gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }}>
+                      <FlexItem>
+                        <TextInput
+                          id={`autorun-time-${idx}`}
+                          type="time"
+                          value={t}
+                          onChange={(_e, v) => updateTime(idx, v)}
+                          style={{ width: '120px' }}
+                          aria-label={`Scheduled time ${idx + 1}`}
+                        />
+                      </FlexItem>
+                      <FlexItem>
+                        <Button variant="plain" isDanger onClick={() => removeTime(idx)} aria-label="Remove time">
+                          ×
+                        </Button>
+                      </FlexItem>
+                    </Flex>
+                  ))}
+                  <FlexItem>
+                    <Button variant="link" onClick={addTime} style={{ paddingLeft: 0 }}>
+                      + Add time
+                    </Button>
+                  </FlexItem>
+                </Flex>
+              </FlexItem>
+            )}
+
+            {/* Force start */}
+            <FlexItem>
+              <Button
+                id="autorun-force-start"
+                variant="secondary"
+                isDisabled={starting}
+                onClick={() => void handleForceStart()}
+              >
+                {starting ? <><Spinner size="sm" /> Starting…</> : '▶ Force start now'}
+              </Button>
+            </FlexItem>
+          </Flex>
+        </CardBody>
+      </Card>
+    </PageSection>
+  );
+}
+
 const DEFAULT_SETTINGS: AppSettings = {
   defaultMinPriority: 'major',
   defaultBudget: '3',
   cloneDir: '.repos',
   executionMode: 'pr',
   outputDir: 'output',
+  autorunEnabled: 'false',
+  autorunTimes: '',
 };
 
 export default function Settings() {
@@ -936,6 +1056,9 @@ export default function Settings() {
         onPendingActiveChange={setPendingActiveId}
         reloadKey={reloadKey}
       />
+
+      {/* ── Daily Autorun ── */}
+      <AutorunWidget settings={settings} set={set} addAlert={addAlert} />
 
       {/* ── Save / Cancel (after AI Providers) ── */}
       <PageSection>

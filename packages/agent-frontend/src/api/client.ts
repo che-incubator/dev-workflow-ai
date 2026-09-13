@@ -175,6 +175,9 @@ export const startRun = (body: {
 export const cancelRun = (threadId: string) =>
   apiFetch<void>(`/runs/${threadId}`, { method: 'DELETE' });
 
+export const triggerAutorun = () =>
+  apiFetch<{ threadId: string; issueUrl: string; title: string; dryRun: boolean }>('/runs/autorun', { method: 'POST' });
+
 // ── WebSocket ─────────────────────────────────────────────────────────────
 
 export type WsEvent =
@@ -263,6 +266,8 @@ export interface AppSettings {
   cloneDir: string;
   executionMode: string; // 'pr' | 'export'
   outputDir: string;
+  autorunEnabled: string; // 'true' | 'false'
+  autorunTimes: string;   // comma-separated HH:MM list e.g. "09:00,14:00"
   [key: string]: string;
 }
 

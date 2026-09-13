@@ -14,6 +14,7 @@ import { runMigrations } from './db/migrations.js';
 import { importKnowledge } from './init/importKnowledge.js';
 import { seedDefaultProviders } from './api/routes/providers.js';
 import { buildServer } from './api/server.js';
+import { startAutorunScheduler } from './scheduler/autorun.js';
 
 async function main() {
   const port = parseInt(process.env.PORT ?? '3000', 10);
@@ -31,6 +32,7 @@ async function main() {
   const app = await buildServer();
   await app.listen({ port, host: '0.0.0.0' });
   console.log(`[boot] dev-workflow-ai ready at http://0.0.0.0:${port}`);
+  startAutorunScheduler();
 }
 
 main().catch(e => {
