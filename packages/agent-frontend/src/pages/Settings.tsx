@@ -588,13 +588,15 @@ function AIProviders({ pendingActiveId, onPendingActiveChange, reloadKey }: AIPr
                           {knownModels.map(m => <SelectOption key={m} value={m}>{m}</SelectOption>)}
                         </SelectList>
                       </Select>
-                      <TextInput
-                        id="add-prov-model"
-                        value={addForm.model}
-                        onChange={(_e, v) => setAddForm(f => ({ ...f, model: v }))}
-                        placeholder="Or type a custom model ID"
-                        style={{ marginTop: '6px' }}
-                      />
+                      {!isKnown && (
+                        <TextInput
+                          id="add-prov-model"
+                          value={addForm.model}
+                          onChange={(_e, v) => setAddForm(f => ({ ...f, model: v }))}
+                          placeholder="Or type a custom model ID"
+                          style={{ marginTop: '6px' }}
+                        />
+                      )}
                     </>
                   ) : (
                     <TextInput id="add-prov-model" value={addForm.model}
