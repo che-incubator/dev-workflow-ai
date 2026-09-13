@@ -21,31 +21,24 @@ components:
           targetPort: 3000
           path: /
         - exposure: public
-          name: vite-dev
+          name: webpack-dev
           protocol: https
           targetPort: 5173
           path: /
+        - exposure: public
+          name: swagger
+          protocol: https
+          targetPort: 3000
+          path: /swagger
       env:
-        - name: DATABASE_URL
-          value: "postgres://agent:agent@localhost:5432/devworkflow"
+        # PGlite — embedded Postgres-in-WASM, no sidecar needed.
+        # Data directory is inside /projects/ which is PVC-backed in Eclipse Che
+        # (survives pod restarts). Remove this var to use in-memory PGlite instead.
+        - name: PGLITE_DATA_DIR
+          value: "/projects/.data/pglite"
         - name: KNOWLEDGE_DIR
           value: "${PROJECT_SOURCE}/pg_seed/eclipse-che"
-        # Persistent repo clone directory — /projects/repos/ survives pod restarts (PVC-backed).
-        # Repos are cloned here on first agent run; subsequent runs reuse the clone.
-        - name: REPOS_DIR
-          value: "/projects/repos"
-        # External Ollama on your intranet — leave empty to use Vertex AI / Claude API
-        - name: OLLAMA_BASE_URL
-          value: ""
-        - name: OLLAMA_MODEL
-          value: "qwen2.5-coder:7b"
-        # Credentials are injected automatically by the DevWorkspace Operator when
-        # the 'dev-workflow-ai-secrets' Secret exists in the workspace namespace with:
-        #   label   controller.devfile.io/mount-to-devworkspace: "true"
-        #   annotation controller.devfile.io/mount-as: env
-        # Create the secret once with: ./run/create-ocp-secret.sh
-        - name: GITHUB_TOKEN
-          value: ""
+        # LLM backend — set one of these (or configure via Settings → AI Providers)
         - name: ANTHROPIC_VERTEX_PROJECT_ID
           value: ""
         - name: CLOUD_ML_REGION
@@ -58,30 +51,25 @@ components:
           value: ""
         - name: GEMINI_API_KEY
           value: ""
-
-  - name: postgres
-    container:
-      image: docker.io/postgres:16-alpine
-      memoryLimit: 512Mi
-      memoryRequest: 64Mi
-      env:
-        - name: POSTGRES_DB
-          value: devworkflow
-        - name: POSTGRES_USER
-          value: agent
-        - name: POSTGRES_PASSWORD
-          value: agent
-        # OpenShift runs containers as a random non-root UID (e.g. 1000660000).
-        # The default PGDATA (/var/lib/postgresql/data) is owned by UID 70 (postgres user)
-        # with mode 700, so the assigned UID cannot chown it.
-        # Redirect to /tmp/pgdata which the container can create and own.
-        - name: PGDATA
-          value: /tmp/pgdata
-      endpoints:
-        - exposure: internal
-          name: postgres
-          protocol: tcp
-          targetPort: 5432
+        # External Ollama on your intranet — leave empty to use Vertex AI / Claude / Gemini
+        - name: OLLAMA_BASE_URL
+          value: ""
+        - name: OLLAMA_MODEL
+          value: "qwen2.5-coder:7b"
+        # GitHub — required for real PR creation; omit for dry-run mode
+        # Injected automatically when 'dev-workflow-ai-secrets' Secret exists:
+        #   label   controller.devfile.io/mount-to-devworkspace: "true"
+        #   annotation controller.devfile.io/mount-as: env
+        # Create the secret once with: ./run/create-ocp-secret.sh
+        - name: GITHUB_TOKEN
+          value: ""
+        # Jira — required for assigned-to-me issue sync
+        - name: JIRA_TOKEN
+          value: ""
+        - name: JIRA_EMAIL
+          value: ""
+        - name: JIRA_BASE_URL
+          value: "https://redhat.atlassian.net"
 
 commands:
   - id: install
@@ -96,7 +84,7 @@ commands:
 
   - id: build
     exec:
-      label: "[DWA] build (UI + backend)"
+      label: "[DWA] build (UI + API)"
       component: tools
       workingDir: ${PROJECT_SOURCE}
       commandLine: "./build/build.sh"
@@ -105,10 +93,10 @@ commands:
 
   - id: build-ui
     exec:
-      label: "[DWA] build UI only"
+      label: "[DWA] build UI only (webpack)"
       component: tools
       workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn build:ui"
+      commandLine: "./build/build.sh --ui-only"
       group:
         kind: build
 
@@ -117,22 +105,13 @@ commands:
       label: "[DWA] build API only (webpack)"
       component: tools
       workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn build:dev"
-      group:
-        kind: build
-
-  - id: init-db
-    exec:
-      label: "[DWA] init database + import knowledge"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "npx tsx scripts/init-db.ts"
+      commandLine: "./build/build.sh --api-only"
       group:
         kind: build
 
   - id: start-api
     exec:
-      label: "[DWA] start API (dev mode)"
+      label: "[DWA] start API (dev mode, PGlite)"
       component: tools
       workingDir: ${PROJECT_SOURCE}
       commandLine: "yarn dev:api"
@@ -142,7 +121,7 @@ commands:
 
   - id: start-ui
     exec:
-      label: "[DWA] start UI dev server"
+      label: "[DWA] start UI dev server (webpack, port 5173)"
       component: tools
       workingDir: ${PROJECT_SOURCE}
       commandLine: "yarn dev:ui"
@@ -179,42 +158,12 @@ commands:
 
   - id: run-issue
     exec:
-      label: "[DWA] run agent on issue (dry-run)"
+      label: "[DWA] run agent on issue (direct)"
       component: tools
       workingDir: ${PROJECT_SOURCE}
       commandLine: "echo 'Usage: npx tsx scripts/run-issue-direct.ts <github-issue-url>'"
       group:
         kind: run
-
-  - id: clone-repos
-    exec:
-      label: "[DWA] pre-clone all Eclipse Che subproject repos"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: |
-        set -e
-        REPOS_DIR="${REPOS_DIR:-/projects/repos}"
-        TOKEN="${GITHUB_TOKEN:-}"
-        auth() { [[ -n "$TOKEN" ]] && echo "https://${TOKEN}@github.com/$1.git" || echo "https://github.com/$1.git"; }
-        clone_or_pull() {
-          local slug="$1" owner="${1%%/*}" repo="${1##*/}"
-          local dir="$REPOS_DIR/$owner/$repo"
-          mkdir -p "$REPOS_DIR/$owner"
-          if [[ -d "$dir/.git" ]]; then
-            echo "↑ pulling $slug"; git -C "$dir" fetch && git -C "$dir" checkout main && git -C "$dir" pull -p || true
-          else
-            echo "⬇ cloning $slug"; git clone --depth=50 "$(auth $slug)" "$dir"
-          fi
-        }
-        clone_or_pull eclipse-che/che-dashboard
-        clone_or_pull eclipse-che/che-server
-        clone_or_pull eclipse-che/che-docs
-        clone_or_pull eclipse-che/che
-        clone_or_pull devfile/devworkspace-operator
-        clone_or_pull che-incubator/devworkspace-generator
-        clone_or_pull che-incubator/che-ai-tool-images
-        clone_or_pull che-incubator/dash-licenses
-        echo "✓ All repos ready in $REPOS_DIR"
 
   - id: install-claude-code
     exec:
