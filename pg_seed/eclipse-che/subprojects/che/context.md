@@ -5,7 +5,6 @@ stack: [GitHub Actions, Shell, Release automation, TypeScript, Mocha, Selenium, 
 description: Eclipse Che umbrella repository — CI/CD, release coordination, devfile samples, cross-repo issue tracker, e2e tests
 auto_approve_min_priority: major
 story_point_budget: 3
-issue_source: https://github.com/eclipse-che/che/issues
 local_path: .repos/eclipse-che/che
 commands:
   test_e2e: "cd tests/e2e && npm run tsc && npm test"
