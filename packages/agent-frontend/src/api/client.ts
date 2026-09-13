@@ -261,6 +261,8 @@ export interface AppSettings {
   defaultMinPriority: string;
   defaultBudget: string;
   cloneDir: string;
+  executionMode: string; // 'pr' | 'export'
+  outputDir: string;
   [key: string]: string;
 }
 

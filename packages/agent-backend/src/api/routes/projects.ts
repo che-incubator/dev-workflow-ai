@@ -213,7 +213,7 @@ export const projectsRoutes: FastifyPluginAsync = async app => {
     schema: {
       tags,
       body: {
-        type: 'object',
+        type: ['object', 'null'],
         properties: {
           localPath: { type: 'string', description: 'Override clone directory (default: from settings)' },
         },

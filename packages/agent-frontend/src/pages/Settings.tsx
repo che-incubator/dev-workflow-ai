@@ -447,7 +447,7 @@ function AIProviders({ pendingActiveId, onPendingActiveChange, reloadKey }: AIPr
           <Divider style={{ margin: '16px 0 12px' }} />
 
           {/* ── Health check all providers (agent-sdk-verifier pattern) ── */}
-          <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }} style={{ marginBottom: '12px' }}>
+          <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }} justifyContent={{ default: 'justifyContentFlexEnd' }} style={{ marginBottom: '12px' }}>
             <FlexItem>
               <Button
                 variant="secondary"
@@ -761,12 +761,15 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultMinPriority: 'major',
   defaultBudget: '3',
   cloneDir: '.repos',
+  executionMode: 'pr',
+  outputDir: 'output',
 };
 
 export default function Settings() {
   const [saved, setSaved] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [priorityOpen, setPriorityOpen] = useState(false);
+  const [executionModeOpen, setExecutionModeOpen] = useState(false);
 
   // Active provider — pending (UI) vs saved (DB)
   const [pendingActiveId, setPendingActiveId] = useState<string | null>(null);
@@ -879,6 +882,49 @@ export default function Settings() {
                   </FlexItem>
                 </Flex>
               </FlexItem>
+
+              {/* 4th: execution mode */}
+              <FlexItem>
+                <Flex gap={{ default: 'gapMd' }} alignItems={{ default: 'alignItemsCenter' }}>
+                  <span style={FIELD_LABEL}>Execution mode:</span>
+                  <Select
+                    id="execution-mode"
+                    isOpen={executionModeOpen}
+                    selected={settings.executionMode}
+                    onSelect={(_e, val) => { set({ executionMode: String(val) }); setExecutionModeOpen(false); }}
+                    onOpenChange={setExecutionModeOpen}
+                    toggle={ref => (
+                      <MenuToggle ref={ref} onClick={() => setExecutionModeOpen(o => !o)} isExpanded={executionModeOpen} style={{ minWidth: '200px' }}>
+                        {settings.executionMode === 'export' ? 'Export to Directory' : 'Create Pull Request'}
+                      </MenuToggle>
+                    )}
+                  >
+                    <SelectList>
+                      <SelectOption value="pr">Create Pull Request</SelectOption>
+                      <SelectOption value="export">Export to Directory</SelectOption>
+                    </SelectList>
+                  </Select>
+                </Flex>
+              </FlexItem>
+
+              {/* 5th: output dir — only when export mode */}
+              {settings.executionMode === 'export' && (
+                <FlexItem>
+                  <Flex gap={{ default: 'gapMd' }} alignItems={{ default: 'alignItemsCenter' }}>
+                    <span style={FIELD_LABEL}>Output directory path:</span>
+                    <FlexItem style={{ maxWidth: 'calc(100% - 250px)' }}>
+                      <TextInput
+                        id="output-dir"
+                        value={settings.outputDir}
+                        onChange={(_e, v) => set({ outputDir: v })}
+                        placeholder="output"
+                        style={{ width: '100%' }}
+                        aria-label="Output directory"
+                      />
+                    </FlexItem>
+                  </Flex>
+                </FlexItem>
+              )}
             </Flex>
           </CardBody>
         </Card>
