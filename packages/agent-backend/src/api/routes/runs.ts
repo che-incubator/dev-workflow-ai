@@ -97,6 +97,7 @@ export async function runAgentInBackground(
   repoSlugOverride?: string,
   issueUrlArg?: string,
   jiraKeyArg?: string,
+  extraState?: Partial<State>,
 ): Promise<void> {
   const config = await loadProjectConfig(project);
   const repoSlug = repoSlugOverride ?? config?.repo ?? '';
@@ -121,6 +122,7 @@ export async function runAgentInBackground(
     forcePriority: forcePriority ?? false,
     dryRun,
     outputDir,
+    ...extraState,
   };
 
   try {
@@ -427,5 +429,76 @@ export const runsRoutes: FastifyPluginAsync = async app => {
 
     console.log(`[autorun] Started run ${threadId} for issue: ${issueUrl}`);
     return reply.status(202).send({ threadId, issueUrl, title: issue.title, dryRun });
+  });
+
+  // POST /cve-batch — pick up to 9 open CVE/Security issues and fix them in ONE PR
+  app.post('/cve-batch', { schema: { tags } }, async (_req, reply) => {
+    // Find all open CVE issues (Security label OR title contains CVE-YYYY-)
+    const { rows: cveRows } = await db.query<{ url: string; title: string; external_id: string }>(
+      `SELECT si.url, si.title, si.external_id
+         FROM issues si
+         LEFT JOIN agent_runs r ON r.issue_url = si.url AND r.status = 'running'
+        WHERE si.status = 'open'
+          AND r.id IS NULL
+          AND (
+            si.title ILIKE '%CVE-%'
+            OR 'Security' = ANY(si.labels)
+            OR 'security' = ANY(si.labels)
+          )
+        ORDER BY si.score DESC
+        LIMIT 9`,
+    );
+
+    if (cveRows.length === 0) {
+      return reply.status(404).send({ error: 'No open CVE / Security issues found' });
+    }
+
+    // Pick project from first issue
+    const firstUrl = cveRows[0].url;
+    const ghParsed = parseIssueUrl(firstUrl);
+    const jiraParsed = ghParsed ? null : parseJiraUrl(firstUrl);
+
+    let project: string;
+    let repoKey: string | undefined;
+
+    if (ghParsed) {
+      repoKey = `${ghParsed.owner}/${ghParsed.repo}`;
+      project = REPO_TO_PROJECT[repoKey] ?? ghParsed.repo;
+    } else if (jiraParsed) {
+      project = (await projectForJiraKey(jiraParsed.key)) ?? jiraParsed.key.split('-')[0].toLowerCase();
+    } else {
+      return reply.status(400).send({ error: `Cannot parse first CVE issue URL: ${firstUrl}` });
+    }
+
+    const dryRun = !process.env.GITHUB_TOKEN;
+    const resolvedOutputDir = process.env.OUTPUT_DIR ?? 'output';
+    const threadId = randomUUID();
+
+    const batchIssues = cveRows.map(r => ({
+      url: r.url,
+      jiraKey: parseJiraUrl(r.url)?.key,
+      title: r.title,
+    }));
+
+    const primaryIssue = cveRows[0];
+    const primaryJiraKey = parseJiraUrl(primaryIssue.url)?.key;
+
+    await db.query(
+      `INSERT INTO agent_runs (thread_id, project_slug, repo, issue_url, status)
+       VALUES ($1, $2, $3, $4, 'running')`,
+      [threadId, project, repoKey ?? '', primaryIssue.url],
+    );
+
+    // Inject batch context into the state
+    const batchFixSummary = `Batch fix ${cveRows.length} CVE issues: ${cveRows.map(r => r.external_id || r.title.slice(0, 30)).join(', ')}`;
+
+    runAgentInBackground(
+      threadId, project, null, true, dryRun, resolvedOutputDir,
+      repoKey, primaryIssue.url, primaryJiraKey,
+      { isBatch: true, batchIssues, fixSummary: batchFixSummary },
+    ).catch(e => console.error(`[cve-batch ${threadId}] Unhandled error:`, e));
+
+    console.log(`[cve-batch] Started batch run ${threadId} for ${cveRows.length} CVE issues`);
+    return reply.status(202).send({ threadId, count: cveRows.length, issues: batchIssues, dryRun });
   });
 };

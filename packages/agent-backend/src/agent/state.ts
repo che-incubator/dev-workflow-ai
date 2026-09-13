@@ -71,6 +71,13 @@ export const AgentState = Annotation.Root({
     default: () => '',
   }),
 
+  // ── CVE batch mode ────────────────────────────────────────────────────────
+  isBatch: Annotation<boolean>({ reducer: (_, v) => v, default: () => false }),
+  batchIssues: Annotation<Array<{ url: string; jiraKey?: string; title?: string }>>({
+    reducer: (_, v) => v,
+    default: () => [],
+  }),
+
   // ── Flow control ─────────────────────────────────────────────────────────
   status: Annotation<'idle' | 'approved' | 'skipped' | 'failed' | 'done'>({
     reducer: (_, v) => v,

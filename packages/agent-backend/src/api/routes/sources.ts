@@ -91,6 +91,9 @@ const BOOST: Record<string, number> = {
   'priority/major': 3,
   'good first issue': 1,
   'help wanted': 1,
+  // CVE / Security: always highest priority
+  'Security': 30,
+  'security': 30,
 };
 
 const SKIP_LABELS = new Set([
@@ -103,7 +106,7 @@ const SKIP_LABELS = new Set([
   'invalid',
 ]);
 
-function scoreIssue(labels: string[]): { score: number; priority: string } {
+function scoreIssue(labels: string[], titleHint = ''): { score: number; priority: string } {
   let score = 5; // default base
   let priority = '';
 
@@ -111,9 +114,17 @@ function scoreIssue(labels: string[]): { score: number; priority: string } {
     if (BASE_SCORE[label]) score += BASE_SCORE[label];
     if (BOOST[label]) score += BOOST[label];
     if (PRIORITY_LABELS[label]) priority = PRIORITY_LABELS[label];
+    // Any label that looks like "CVE-YYYY-NNNNN" gets security boost
+    if (/^CVE-\d{4}-\d+/i.test(label)) score += 25;
   }
   if (priority === 'critical') score += 5;
   if (priority === 'major') score += 3;
+
+  // Boost CVEs detected in the title (common for Jira issues like "CVE-2026-...")
+  if (/CVE-\d{4}-\d+/i.test(titleHint)) {
+    score = Math.max(score, 40); // floor at 40 to guarantee top placement
+    if (!priority) priority = 'critical';
+  }
 
   return { score, priority };
 }
@@ -171,7 +182,7 @@ async function fetchGitHubIssues(repoSlug: string, sourceId: number): Promise<nu
         a => a.login ?? '',
       );
 
-      const { score, priority } = scoreIssue(labels);
+      const { score, priority } = scoreIssue(labels, title);
       const storyPoints = estimateStoryPoints(body, title);
 
       await db.query(
@@ -272,9 +283,9 @@ async function fetchJiraIssues(sourceUrl: string, sourceId: number): Promise<num
       (fields.issuetype as { name?: string } | null)?.name ?? '',
     ).toLowerCase();
 
-    let score = issuetype.includes('bug') ? 10 : 6;
-    if (priority === 'critical') score += 5;
-    if (priority === 'major') score += 3;
+    const { score, priority: scoredPriority } = scoreIssue(labelsArr, title);
+    const finalScore = Math.max(score, issuetype.includes('bug') ? 10 : 6);
+    const finalPriority = scoredPriority || priority;
     const storyPoints = estimateStoryPoints(body, title);
 
     await db.query(
@@ -289,10 +300,10 @@ async function fetchJiraIssues(sourceUrl: string, sourceId: number): Promise<num
         url,
         body.slice(0, 4000),
         labels,
-        priority,
+        finalPriority,
         assigneeLogin ? [assigneeLogin] : [],
         status,
-        score,
+        finalScore,
         storyPoints,
         JSON.stringify(item),
       ],
@@ -599,15 +610,17 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
           : rawPriority.includes('trivial') || rawPriority.includes('low') ? 'trivial'
           : '';
 
+        const { score: issScore } = scoreIssue(fields.labels ?? [], title);
+
         await db.query(
-          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, raw, fetched_at)
-           VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, now())
+          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, raw, fetched_at)
+           VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, $9, now())
            ON CONFLICT (source_id, external_id) DO UPDATE SET
              title = EXCLUDED.title, labels = EXCLUDED.labels,
              status = EXCLUDED.status, priority = EXCLUDED.priority,
-             raw = EXCLUDED.raw, fetched_at = now()`,
+             score = EXCLUDED.score, raw = EXCLUDED.raw, fetched_at = now()`,
           [sourceId, key, title, issueUrl, fields.labels ?? [],
-           status, priority, JSON.stringify(fields)],
+           status, priority, issScore, JSON.stringify(fields)],
         );
         upserted++;
       }
@@ -711,15 +724,17 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
         : rawPriority.includes('trivial') || rawPriority.includes('low') ? 'trivial'
         : '';
 
+      const { score: issueScore } = scoreIssue(fields.labels ?? [], fields.summary);
+
       await db.query(
-        `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, raw, fetched_at)
-         VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, now())
+        `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, raw, fetched_at)
+         VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, $9, now())
          ON CONFLICT (source_id, external_id) DO UPDATE SET
            title = EXCLUDED.title, labels = EXCLUDED.labels,
            status = EXCLUDED.status, priority = EXCLUDED.priority,
-           raw = EXCLUDED.raw, fetched_at = now()`,
+           score = EXCLUDED.score, raw = EXCLUDED.raw, fetched_at = now()`,
         [source.id, key, fields.summary, issueUrl, fields.labels ?? [],
-         status, priority, JSON.stringify(fields)],
+         status, priority, issueScore, JSON.stringify(fields)],
       );
       upserted++;
     }

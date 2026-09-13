@@ -187,6 +187,9 @@ export const cancelRun = (threadId: string) =>
 export const triggerAutorun = () =>
   apiFetch<{ threadId: string; issueUrl: string; title: string; dryRun: boolean }>('/runs/autorun', { method: 'POST' });
 
+export const triggerCveBatch = () =>
+  apiFetch<{ threadId: string; count: number; issues: Array<{ url: string; title: string }> }>('/runs/cve-batch', { method: 'POST' });
+
 // ── WebSocket ─────────────────────────────────────────────────────────────
 
 export type WsEvent =

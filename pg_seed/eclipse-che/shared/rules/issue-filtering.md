@@ -29,14 +29,28 @@ An issue is **ineligible** if ANY of these are true:
 
 ---
 
+## CVE / Security Issues — Highest Priority (fix first)
+
+Issues with a **`Security`** label or a title matching `CVE-YYYY-NNNNN` are treated as the highest-priority class:
+
+- Score floor: **40** (overrides all other scoring — always at the top of the ranked list)
+- Priority override: `critical`
+- Story-point budget does NOT apply (fix regardless of budget)
+- **Batch rule**: if ≤ 9 open CVE/Security issues exist, combine them into **one branch and one PR** instead of opening separate PRs per issue. Reference all CVE identifiers in the PR title and body.
+
+Example batch PR: https://github.com/eclipse-che/che-dashboard/pull/1662
+
+---
+
 ## Priority Boosts (additive)
 
 | Signal | How to detect | Boost |
 |---|---|---|
+| `Security` label | label == "Security" or "security" | +30 |
 | `priority/critical` label | label present | +5 |
 | `priority/high` label | label present | +3 |
 | `priority/major` label | label present | +2 |
-| CVE label (`CVE-YYYY-NNNNN`) | label starts with `CVE-` | +3 |
+| CVE label (`CVE-YYYY-NNNNN`) | label starts with `CVE-` | +25 |
 | Has linked failing PR | body/comments contain `#NNNN` pointing to an open PR | +3 |
 | Has test reproduction | body contains code block with reproduction steps | +2 |
 | Linked to failing CI run | body/comments contain GitHub Actions URL with failed status | +2 |

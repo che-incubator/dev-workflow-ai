@@ -57,6 +57,7 @@ import {
   syncSource,
   syncJiraAssigned,
   isJiraAssignedUrl,
+  triggerCveBatch,
 } from '../api/client.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────
@@ -641,6 +642,35 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
 
 type IssueView = 'all' | 'prioritized' | 'skipped';
 
+function CveBatchButton() {
+  const { addAlert } = useAlerts();
+  const [loading, setLoading] = React.useState(false);
+
+  async function handleBatch(): Promise<void> {
+    setLoading(true);
+    try {
+      const result = await triggerCveBatch();
+      addAlert('success', `Batch CVE run started (${result.count} issues) — thread: ${result.threadId.slice(-8)}`);
+    } catch (e) {
+      addAlert('danger', e instanceof Error ? e.message : 'Batch CVE fix failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Button
+      id="cve-batch-btn"
+      variant="secondary"
+      isDisabled={loading}
+      onClick={() => void handleBatch()}
+      title="Combine all open CVE / Security issues into one PR"
+    >
+      {loading ? <><Spinner size="sm" /> Running…</> : 'Batch CVE fix'}
+    </Button>
+  );
+}
+
 function AllIssuesSection({
   issues,
   loading,
@@ -744,6 +774,11 @@ function AllIssuesSection({
             </Flex>
           </FlexItem>
           <FlexItem>
+            <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }}>
+              <FlexItem>
+                <CveBatchButton />
+              </FlexItem>
+              <FlexItem>
             <SearchInput
               id="issues-filter"
               placeholder="Filter by"
@@ -753,6 +788,8 @@ function AllIssuesSection({
               aria-label="Filter issues"
               style={{ width: '220px' }}
             />
+              </FlexItem>
+            </Flex>
           </FlexItem>
         </Flex>
 

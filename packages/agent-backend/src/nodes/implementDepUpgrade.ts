@@ -89,6 +89,11 @@ async function findPackageJsonWith(repoRoot: string, dep: string): Promise<strin
 // ── Main node ────────────────────────────────────────────────────────────────
 
 export async function implementDepUpgradeNode(state: State): Promise<Partial<State>> {
+  // ── Batch CVE mode: combine multiple CVE issues into one upgrade ──────────
+  if (state.isBatch && state.batchIssues && state.batchIssues.length > 0) {
+    return await implementBatchDepUpgrade(state);
+  }
+
   // Prefer state.fixSummary (direct field set by analyze); fall back to the log message
   const analysisSummary =
     state.fixSummary ??
@@ -294,6 +299,116 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
     affectedFiles: [...changedFiles, 'yarn.lock'],
     branchName,  // already created above — openPr will commit + push it
     fixSummary: `Upgrade ${packageName} to ${resolvedVersion} to patch ${state.jiraKey || 'CVE'}`,
+    testsPassed: true,
+    lintPassed: true,
+    retryCount: 0,
+  };
+}
+
+// ── Batch CVE upgrade — multiple packages in one branch/PR ────────────────
+
+async function implementBatchDepUpgrade(state: State): Promise<Partial<State>> {
+  const batchIssues = state.batchIssues ?? [];
+  const config = await loadProjectConfig(state.project);
+  const rawPath = config?.local_path ?? state.repoLocal ?? '';
+  const repoRoot = rawPath.startsWith('/') ? rawPath : resolve(process.cwd(), rawPath);
+  const defaultBranch = config?.default_branch ?? 'main';
+
+  if (!repoRoot) {
+    return { messages: ['batch_dep_upgrade: no local_path configured'], status: 'failed' };
+  }
+
+  // Clone/fetch repo
+  const repoSlug = config?.repo ?? state.repoSlug ?? '';
+  if (repoSlug) {
+    try {
+      const token = process.env.GITHUB_TOKEN;
+      const repoUrl = `https://github.com/${repoSlug}.git`;
+      const authedUrl = token ? repoUrl.replace('https://', `https://oauth2:${token}@`) : repoUrl;
+      const { mkdirSync, existsSync } = await import('node:fs');
+      mkdirSync(resolve(repoRoot, '..'), { recursive: true });
+      if (existsSync(resolve(repoRoot, '.git'))) {
+        await execAsync(`git -C ${JSON.stringify(repoRoot)} fetch --all --prune`, { timeout: 120_000 });
+      } else {
+        await execAsync(`git clone ${JSON.stringify(authedUrl)} ${JSON.stringify(repoRoot)}`, { timeout: 300_000 });
+      }
+    } catch (e) {
+      return { messages: [`batch_dep_upgrade: git fetch failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`], status: 'failed' };
+    }
+  }
+
+  // Create batch branch
+  const issueKeys = batchIssues.map(i => i.jiraKey || i.url.split('/').pop()).slice(0, 5).join('-');
+  const branchName = `cve-batch-${issueKeys}-deps`.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 80);
+
+  try {
+    await execAsync(`git -C ${JSON.stringify(repoRoot)} fetch --all --prune`, { timeout: 60_000 });
+    await execAsync(`git -C ${JSON.stringify(repoRoot)} checkout ${defaultBranch} && git -C ${JSON.stringify(repoRoot)} reset --hard origin/${defaultBranch}`, { timeout: 30_000 });
+    await execAsync(`git -C ${JSON.stringify(repoRoot)} branch -D ${branchName} 2>/dev/null || true`, { timeout: 10_000 });
+    await execAsync(`git -C ${JSON.stringify(repoRoot)} checkout -b ${branchName}`, { timeout: 10_000 });
+  } catch (e) {
+    return { messages: [`batch_dep_upgrade: branch setup failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`], status: 'failed' };
+  }
+
+  // Extract package names from all batch issue titles/summaries
+  const upgrades: Array<{ packageName: string; resolvedVersion: string }> = [];
+  const allChangedFiles: string[] = [];
+
+  for (const issue of batchIssues) {
+    const text = issue.title ?? '';
+    const parsed = parseDepUpgrade(text);
+    if (!parsed) continue;
+
+    const { packageName } = parsed;
+    // Resolve latest from npm
+    let resolvedVersion = parsed.targetVersion ?? '';
+    try {
+      const { stdout } = await execAsync(`npm info ${packageName} version`, { timeout: 10_000 });
+      resolvedVersion = stdout.trim();
+    } catch { if (!resolvedVersion) continue; }
+
+    // Find and update package.json files
+    const pkgFiles = await findPackageJsonWith(repoRoot, packageName);
+    for (const pkgFile of pkgFiles) {
+      const raw = await readFile(pkgFile, 'utf-8');
+      const pkg = JSON.parse(raw) as Record<string, Record<string, string>>;
+      let changed = false;
+      for (const section of ['dependencies', 'devDependencies', 'peerDependencies'] as const) {
+        if (pkg[section]?.[packageName]) {
+          pkg[section][packageName] = `^${resolvedVersion}`;
+          changed = true;
+        }
+      }
+      if (changed) {
+        await writeFile(pkgFile, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+        const rel = pkgFile.replace(repoRoot + '/', '');
+        if (!allChangedFiles.includes(rel)) allChangedFiles.push(rel);
+      }
+    }
+
+    if (pkgFiles.length > 0) upgrades.push({ packageName, resolvedVersion });
+  }
+
+  if (upgrades.length === 0) {
+    return { messages: ['batch_dep_upgrade: no packages found to upgrade'], status: 'failed' };
+  }
+
+  // Run yarn install once for all upgrades
+  try {
+    await execAsync('yarn install --silent', { cwd: repoRoot, timeout: 180_000 });
+  } catch (e) {
+    return { messages: [`batch_dep_upgrade: yarn install failed — ${e instanceof Error ? e.message : String(e)}`], status: 'failed' };
+  }
+
+  const upgradeList = upgrades.map(u => `${u.packageName}@${u.resolvedVersion}`).join(', ');
+  const issueRefs = batchIssues.map(i => i.jiraKey || i.url).join(', ');
+  const summary = `batch_dep_upgrade: upgraded ${upgrades.length} packages (${upgradeList}) for CVEs: ${issueRefs}`;
+
+  return {
+    messages: [summary],
+    affectedFiles: [...allChangedFiles, 'yarn.lock'],
+    branchName,
+    fixSummary: `Batch CVE fix: upgrade ${upgradeList}`,
     testsPassed: true,
     lintPassed: true,
     retryCount: 0,
