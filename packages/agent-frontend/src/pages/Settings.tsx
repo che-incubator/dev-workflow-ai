@@ -185,9 +185,12 @@ interface AIProvidersProps {
   onPendingActiveChange: (id: string) => void;
   /** Reload trigger: incremented by parent on Save/Cancel to force a fresh fetch */
   reloadKey: number;
+  /** Providers added in the UI but not yet persisted (cleared on Cancel, saved on Save) */
+  pendingProviders: ProviderForm[];
+  onPendingProvidersChange: (providers: ProviderForm[]) => void;
 }
 
-function AIProviders({ pendingActiveId, onPendingActiveChange, reloadKey }: AIProvidersProps) {
+function AIProviders({ pendingActiveId, onPendingActiveChange, reloadKey, pendingProviders, onPendingProvidersChange }: AIProvidersProps) {
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [openKebab, setOpenKebab] = useState<string | null>(null);
@@ -260,27 +263,12 @@ function AIProviders({ pendingActiveId, onPendingActiveChange, reloadKey }: AIPr
     }
   };
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!addForm.provider_id) return;
-    setAdding(true);
-    try {
-      await upsertProvider({
-        provider_id: addForm.provider_id,
-        label: addForm.label || addForm.provider_id,
-        api_key: addForm.api_key,
-        model: addForm.model,
-        base_url: addForm.base_url,
-        is_active: false,
-      });
-      addAlert('success', `Provider "${addForm.provider_id}" added`);
-      setShowAdd(false);
-      setAddForm({ ...EMPTY_ADD });
-      load();
-    } catch (e) {
-      addAlert('danger', e instanceof Error ? e.message : String(e));
-    } finally {
-      setAdding(false);
-    }
+    // Stage the new provider — it will be persisted when the parent saves
+    onPendingProvidersChange([...pendingProviders, { ...addForm, label: addForm.label || addForm.provider_id }]);
+    setShowAdd(false);
+    setAddForm({ ...EMPTY_ADD });
   };
 
   const handleTest = async () => {
@@ -300,7 +288,7 @@ function AIProviders({ pendingActiveId, onPendingActiveChange, reloadKey }: AIPr
     }
   };
 
-  const existingIds = new Set(providers.map(p => p.provider_id));
+  const existingIds = new Set([...providers.map(p => p.provider_id), ...pendingProviders.map(p => p.provider_id)]);
   const availableToAdd = KNOWN_PROVIDERS.filter(id => !existingIds.has(id));
   const addMeta = providerMeta(addForm.provider_id);
   const editMeta = editTarget ? providerMeta(editTarget.provider_id) : null;
@@ -442,6 +430,37 @@ function AIProviders({ pendingActiveId, onPendingActiveChange, reloadKey }: AIPr
                     </Tr>
                   );
                 })}
+                {/* Pending (staged) providers — shown before Save */}
+                {pendingProviders.map((p, idx) => {
+                  const meta = providerMeta(p.provider_id);
+                  return (
+                    <Tr key={`pending-${p.provider_id}`} style={{ opacity: 0.85 }}>
+                      <Td style={{ minWidth: '235px' }}>
+                        <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }}>
+                          <span>{p.label}</span>
+                          <Label color="orange" isCompact>Unsaved</Label>
+                        </Flex>
+                      </Td>
+                      <Td>
+                        {meta.noKey ? (
+                          <span style={{ color: 'var(--pf-t--global--text--color--subtle)', fontSize: '0.8rem' }}>—</span>
+                        ) : p.api_key ? (
+                          <Label color="green" isCompact>{meta.key} set</Label>
+                        ) : (
+                          <Label color="grey" isCompact>No {meta.key}</Label>
+                        )}
+                      </Td>
+                      <Td><span style={{ fontSize: '0.85rem' }}>{p.model || '—'}</span></Td>
+                      <Td><span style={{ fontSize: '0.85rem', color: 'var(--pf-t--global--text--color--subtle)' }}>{p.base_url || '—'}</span></Td>
+                      <Td isActionCell>
+                        <Button variant="plain" isDanger aria-label="Remove pending provider"
+                          onClick={() => onPendingProvidersChange(pendingProviders.filter((_, i) => i !== idx))}>
+                          ×
+                        </Button>
+                      </Td>
+                    </Tr>
+                  );
+                })}
               </Tbody>
             </Table>
           )}
@@ -449,7 +468,7 @@ function AIProviders({ pendingActiveId, onPendingActiveChange, reloadKey }: AIPr
           <Divider style={{ margin: '16px 0 12px' }} />
 
           {/* ── Health check all providers (agent-sdk-verifier pattern) ── */}
-          <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }} justifyContent={{ default: 'justifyContentFlexEnd' }} style={{ marginBottom: '12px' }}>
+          <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }} style={{ marginBottom: '12px' }}>
             <FlexItem>
               <Button
                 variant="secondary"
@@ -896,6 +915,8 @@ export default function Settings() {
   // Active provider — pending (UI) vs saved (DB)
   const [pendingActiveId, setPendingActiveId] = useState<string | null>(null);
   const [savedActiveId, setSavedActiveId] = useState<string | null>(null);
+  // Providers staged in the UI, not yet persisted to DB
+  const [pendingProviders, setPendingProviders] = useState<ProviderForm[]>([]);
   // Increment to force AIProviders to re-fetch after Save/Cancel
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -912,7 +933,7 @@ export default function Settings() {
     }).catch(() => {});
   }, []);
 
-  const providerDirty = pendingActiveId !== savedActiveId;
+  const providerDirty = pendingActiveId !== savedActiveId || pendingProviders.length > 0;
   const settingsDirty = JSON.stringify(settings) !== JSON.stringify(saved);
   const isDirty = settingsDirty || providerDirty;
 
@@ -922,11 +943,23 @@ export default function Settings() {
     try {
       await saveSettings(settings);
       setSaved(settings);
-      if (providerDirty && pendingActiveId) {
+      if (pendingActiveId !== savedActiveId && pendingActiveId) {
         await upsertProvider({ provider_id: pendingActiveId, is_active: true });
         setSavedActiveId(pendingActiveId);
-        setReloadKey(k => k + 1);
       }
+      // Persist staged providers
+      for (const p of pendingProviders) {
+        await upsertProvider({
+          provider_id: p.provider_id,
+          label: p.label,
+          api_key: p.api_key,
+          model: p.model,
+          base_url: p.base_url,
+          is_active: false,
+        });
+      }
+      if (pendingProviders.length > 0) setPendingProviders([]);
+      setReloadKey(k => k + 1);
       addAlert('success', 'Settings saved');
     } catch (e) {
       addAlert('danger', e instanceof Error ? e.message : 'Failed to save settings');
@@ -936,6 +969,7 @@ export default function Settings() {
   const handleCancel = () => {
     setSettings(saved);
     setPendingActiveId(savedActiveId);
+    setPendingProviders([]);
   };
 
   return (
@@ -1057,6 +1091,8 @@ export default function Settings() {
         pendingActiveId={pendingActiveId}
         onPendingActiveChange={setPendingActiveId}
         reloadKey={reloadKey}
+        pendingProviders={pendingProviders}
+        onPendingProvidersChange={setPendingProviders}
       />
 
       {/* ── Daily Autorun ── */}

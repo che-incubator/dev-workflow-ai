@@ -10,7 +10,7 @@
  *   Red Hat, Inc. - initial API and implementation
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
 import {
   Page,
@@ -36,6 +36,7 @@ import {
   Brand,
   Spinner,
   Bullseye,
+  PageContext,
 } from '@patternfly/react-core';
 import { QuestionCircleIcon } from '@patternfly/react-icons';
 
@@ -123,57 +124,45 @@ function HelpMenu({ onAbout }: { onAbout: () => void }) {
   );
 }
 
-const SIDEBAR_BREAKPOINT = 1024;
+// Hamburger button that calls PF6's own sidebar toggle from Page context
+function NavToggleButton() {
+  const { onSidebarToggle, isSidebarOpen } = React.useContext(PageContext);
+  return (
+    <button
+      id="nav-toggle"
+      className="pf-v6-c-button pf-m-plain pf-m-hamburger"
+      type="button"
+      aria-label="Global navigation"
+      aria-expanded={isSidebarOpen}
+      onClick={onSidebarToggle}
+    >
+      <span className="pf-v6-c-button__icon">
+        <svg
+          viewBox="0 0 10 10"
+          className="pf-v6-c-button--hamburger-icon pf-v6-svg"
+          width="1em"
+          height="1em"
+          aria-hidden="true"
+        >
+          <path className="pf-v6-c-button--hamburger-icon--top" d="M1,1 L9,1" />
+          <path className="pf-v6-c-button--hamburger-icon--middle" d="M1,5 L9,5" />
+          <path className="pf-v6-c-button--hamburger-icon--arrow" d="M1,5 L1,5 L1,5" />
+          <path className="pf-v6-c-button--hamburger-icon--bottom" d="M9,9 L1,9" />
+        </svg>
+      </span>
+    </button>
+  );
+}
 
 function AppShell() {
-  const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => window.innerWidth >= SIDEBAR_BREAKPOINT,
-  );
   const [aboutOpen, setAboutOpen] = useState(false);
   const branding = useBranding();
-
-  // Auto-close sidebar when viewport narrows below breakpoint
-  useEffect(() => {
-    const onResize = () => {
-      if (window.innerWidth < SIDEBAR_BREAKPOINT) setSidebarOpen(false);
-    };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  // Auto-close sidebar on navigation when on a narrow screen
-  useEffect(() => {
-    if (window.innerWidth < SIDEBAR_BREAKPOINT) setSidebarOpen(false);
-  }, [location.pathname]);
 
   const masthead = (
     <Masthead>
       <MastheadMain>
         <MastheadToggle>
-          <button
-            id="nav-toggle"
-            className="pf-v6-c-button pf-m-plain pf-m-hamburger"
-            type="button"
-            aria-label="Global navigation"
-            aria-expanded={sidebarOpen}
-            onClick={() => setSidebarOpen(o => !o)}
-          >
-            <span className="pf-v6-c-button__icon">
-              <svg
-                viewBox="0 0 10 10"
-                className="pf-v6-c-button--hamburger-icon pf-v6-svg"
-                width="1em"
-                height="1em"
-                aria-hidden="true"
-              >
-                <path className="pf-v6-c-button--hamburger-icon--top" d="M1,1 L9,1" />
-                <path className="pf-v6-c-button--hamburger-icon--middle" d="M1,5 L9,5" />
-                <path className="pf-v6-c-button--hamburger-icon--arrow" d="M1,5 L1,5 L1,5" />
-                <path className="pf-v6-c-button--hamburger-icon--bottom" d="M9,9 L1,9" />
-              </svg>
-            </span>
-          </button>
+          <NavToggleButton />
         </MastheadToggle>
         <MastheadBrand>
           <Brand
@@ -211,10 +200,10 @@ function AppShell() {
   return (
     <>
       <Page
-        isManagedSidebar={false}
+        isManagedSidebar
         masthead={masthead}
         sidebar={
-          <PageSidebar isSidebarOpen={sidebarOpen}>
+          <PageSidebar>
             <PageSidebarBody>
               <AppNav />
             </PageSidebarBody>
