@@ -38,18 +38,9 @@
  * Requires: DATABASE_URL env var (or set in .env)
  */
 
-import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { config as loadDotenv } from 'dotenv';
 import matter from 'gray-matter';
-
-// Load .env if present
-const envPath = resolve(process.cwd(), '.env');
-if (existsSync(envPath)) {
-  loadDotenv({ path: envPath });
-  console.log('[env] Loaded .env');
-}
 
 // ── CLI args ───────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
