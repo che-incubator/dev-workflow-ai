@@ -153,16 +153,6 @@ async function main() {
   const { importKnowledge } = await import('../packages/agent-backend/src/init/importKnowledge.js');
   const result = await importKnowledge();
 
-  const { db } = await import('../packages/agent-backend/src/db/client.js');
-
-  // Print summary
-  const { rows: projects } = await db.query(
-    "SELECT slug, repo, description FROM projects WHERE repo != '' ORDER BY slug",
-  );
-  const { rows: sources } = await db.query(
-    'SELECT label, kind, last_synced_at FROM issue_sources ORDER BY label',
-  );
-
   console.log();
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('  Initialisation complete');
@@ -171,29 +161,10 @@ async function main() {
   console.log(`  Projects registered:    ${result.projects}`);
   console.log(`  Issue sources added:    ${result.sources}`);
   console.log();
-
-  if (projects.length > 0) {
-    console.log('  Projects:');
-    for (const p of projects) {
-      console.log(`    ${p.slug.padEnd(30)} ${p.repo}`);
-    }
-    console.log();
-  }
-
-  if (sources.length > 0) {
-    console.log('  Issue sources (will sync on first API request):');
-    for (const s of sources) {
-      console.log(`    [${s.kind.padEnd(6)}] ${s.label}`);
-    }
-    console.log();
-  }
-
   console.log('  Next steps:');
   console.log('    • Start the stack:   yarn dev');
   console.log('    • Run an issue:      yarn run-issue <github-issue-url>');
   console.log();
-
-  await db.end();
 }
 
 main().catch(e => {
