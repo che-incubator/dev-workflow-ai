@@ -58,22 +58,22 @@ components:
 commands:
   - id: start-prepare
     exec:
-      label: "[DWA] start:prepare — seed DB + start API (first run)"
+      label: "[DWA] start:prepare — seed DB from pg_seed/"
       component: tools
       workingDir: ${PROJECT_SOURCE}
       commandLine: "yarn start:prepare"
       group:
         kind: run
-        isDefault: true
 
   - id: dev
     exec:
-      label: "[DWA] dev — start API only (PGlite, hot-reload)"
+      label: "[DWA] dev — start API (PGlite, hot-reload)"
       component: tools
       workingDir: ${PROJECT_SOURCE}
       commandLine: "yarn dev"
       group:
         kind: run
+        isDefault: true
 
   - id: start
     exec:
