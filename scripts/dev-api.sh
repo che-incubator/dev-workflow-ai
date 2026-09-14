@@ -13,6 +13,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Forward SIGINT/SIGTERM to all child processes so tsx stops cleanly
+# when the terminal is closed or Ctrl+C is pressed.
+trap 'kill 0' SIGINT SIGTERM EXIT
+
 # Load .env if present (shell env vars take precedence)
 if [[ -f "$ROOT/.env" ]]; then
   set -a; source "$ROOT/.env"; set +a
