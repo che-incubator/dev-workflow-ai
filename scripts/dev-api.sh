@@ -62,10 +62,6 @@ else
 fi
 echo ""
 
-# Clear stale GOOGLE_APPLICATION_CREDENTIALS file path — credentials are now
-# stored inline in GOOGLE_APPLICATION_CREDENTIALS_JSON (set in .env or .zshrc)
-unset GOOGLE_APPLICATION_CREDENTIALS
-
 # Release port 3000 if still held by a previous dev process
 PORT="${PORT:-3000}"
 if lsof -ti :"$PORT" &>/dev/null; then
