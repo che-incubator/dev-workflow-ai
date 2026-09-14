@@ -14,8 +14,7 @@
   },
   "include": [
     "packages/agent-backend/src/**/*",
-    "packages/agent-frontend/src/**/*",
-    "scripts/**/*"
+    "packages/agent-frontend/src/**/*"
   ],
   "exclude": ["node_modules", "dist"]
 }

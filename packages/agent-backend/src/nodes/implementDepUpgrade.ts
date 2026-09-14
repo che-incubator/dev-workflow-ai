@@ -28,7 +28,6 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { glob } from 'node:fs';
 import { State } from '../agent/state.js';
 import { loadProjectConfig } from '../context/loader.js';
 
@@ -65,20 +64,32 @@ async function findPackageJsonWith(repoRoot: string, dep: string): Promise<strin
 
   async function scan(dir: string): Promise<void> {
     let entries: string[];
-    try { entries = await readdir(dir); } catch { return; }
+    try {
+      entries = await readdir(dir);
+    } catch {
+      return;
+    }
     for (const e of entries) {
       if (e === 'node_modules' || e.startsWith('.')) continue;
       const full = join(dir, e);
       const s = await stat(full).catch(() => null);
       if (!s) continue;
-      if (s.isDirectory()) { await scan(full); continue; }
+      if (s.isDirectory()) {
+        await scan(full);
+        continue;
+      }
       if (e === 'package.json') {
         try {
           const raw = await readFile(full, 'utf-8');
           const pkg = JSON.parse(raw) as Record<string, unknown>;
-          const deps = { ...(pkg.dependencies as object ?? {}), ...(pkg.devDependencies as object ?? {}) };
+          const deps = {
+            ...((pkg.dependencies as object) ?? {}),
+            ...((pkg.devDependencies as object) ?? {}),
+          };
           if (dep in deps) found.push(full);
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
     }
   }
@@ -104,7 +115,9 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
 
   if (!upgrade) {
     return {
-      messages: ['implement_dep_upgrade: could not parse package name from analyze summary — skipping'],
+      messages: [
+        'implement_dep_upgrade: could not parse package name from analyze summary — skipping',
+      ],
       testsPassed: false,
       lintPassed: false,
       status: 'failed',
@@ -125,9 +138,7 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
     try {
       const repoUrl = `https://github.com/${repoSlug}.git`;
       const token = process.env.GITHUB_TOKEN;
-      const authedUrl = token
-        ? repoUrl.replace('https://', `https://oauth2:${token}@`)
-        : repoUrl;
+      const authedUrl = token ? repoUrl.replace('https://', `https://oauth2:${token}@`) : repoUrl;
 
       const { mkdirSync, existsSync } = await import('node:fs');
       const parentDir = resolve(repoRoot, '..');
@@ -135,21 +146,23 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
 
       if (existsSync(resolve(repoRoot, '.git'))) {
         // Already cloned — fetch only; the reset step below brings us to HEAD
-        await execAsync(
-          `git -C ${JSON.stringify(repoRoot)} fetch --all --prune`,
-          { timeout: 120_000 },
-        );
+        await execAsync(`git -C ${JSON.stringify(repoRoot)} fetch --all --prune`, {
+          timeout: 120_000,
+        });
       } else {
         // Fresh clone
-        await execAsync(
-          `git clone ${JSON.stringify(authedUrl)} ${JSON.stringify(repoRoot)}`,
-          { timeout: 300_000 },
-        );
+        await execAsync(`git clone ${JSON.stringify(authedUrl)} ${JSON.stringify(repoRoot)}`, {
+          timeout: 300_000,
+        });
       }
     } catch (e) {
       return {
-        messages: [`implement_dep_upgrade: git clone/pull failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`],
-        testsPassed: false, lintPassed: false, status: 'failed',
+        messages: [
+          `implement_dep_upgrade: git clone/pull failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`,
+        ],
+        testsPassed: false,
+        lintPassed: false,
+        status: 'failed',
       };
     }
   }
@@ -162,10 +175,7 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
     const defaultBranch = config?.default_branch ?? 'main';
 
     // Fetch latest, reset to clean default branch
-    await execAsync(
-      `git -C ${JSON.stringify(repoRoot)} fetch --all --prune`,
-      { timeout: 60_000 },
-    );
+    await execAsync(`git -C ${JSON.stringify(repoRoot)} fetch --all --prune`, { timeout: 60_000 });
     await execAsync(
       `git -C ${JSON.stringify(repoRoot)} checkout ${defaultBranch} && git -C ${JSON.stringify(repoRoot)} reset --hard origin/${defaultBranch}`,
       { timeout: 30_000 },
@@ -176,15 +186,18 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
       `git -C ${JSON.stringify(repoRoot)} branch -D ${branchName} 2>/dev/null || true`,
       { timeout: 10_000 },
     );
-    await execAsync(
-      `git -C ${JSON.stringify(repoRoot)} checkout -b ${branchName}`,
-      { timeout: 10_000 },
-    );
+    await execAsync(`git -C ${JSON.stringify(repoRoot)} checkout -b ${branchName}`, {
+      timeout: 10_000,
+    });
     console.log(`[dep-upgrade] On new branch: ${branchName}`);
   } catch (e) {
     return {
-      messages: [`implement_dep_upgrade: branch setup failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`],
-      testsPassed: false, lintPassed: false, status: 'failed',
+      messages: [
+        `implement_dep_upgrade: branch setup failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`,
+      ],
+      testsPassed: false,
+      lintPassed: false,
+      status: 'failed',
     };
   }
 
@@ -192,7 +205,9 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
   const pkgFiles = await findPackageJsonWith(repoRoot, packageName);
   if (pkgFiles.length === 0) {
     return {
-      messages: [`implement_dep_upgrade: ${packageName} not found in any package.json under ${repoRoot}`],
+      messages: [
+        `implement_dep_upgrade: ${packageName} not found in any package.json under ${repoRoot}`,
+      ],
       testsPassed: false,
       lintPassed: false,
     };
@@ -218,7 +233,9 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
     if (!resolvedVersion) {
       return {
         messages: [`implement_dep_upgrade: could not resolve version for ${packageName} from npm`],
-        testsPassed: false, lintPassed: false, status: 'failed',
+        testsPassed: false,
+        lintPassed: false,
+        status: 'failed',
       };
     }
   }
@@ -259,7 +276,9 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
     await execAsync('yarn install --silent', { cwd: repoRoot, timeout: 120_000 });
   } catch (e) {
     return {
-      messages: [`implement_dep_upgrade: yarn install failed — ${e instanceof Error ? e.message : String(e)}`],
+      messages: [
+        `implement_dep_upgrade: yarn install failed — ${e instanceof Error ? e.message : String(e)}`,
+      ],
       testsPassed: false,
       lintPassed: false,
     };
@@ -270,7 +289,9 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
     await execAsync('yarn license:generate', { cwd: repoRoot, timeout: 120_000 });
   } catch (e) {
     // Non-fatal: warn but don't block the upgrade
-    console.warn(`[dep-upgrade] yarn license:generate failed — ${e instanceof Error ? e.message.slice(0, 200) : e}`);
+    console.warn(
+      `[dep-upgrade] yarn license:generate failed — ${e instanceof Error ? e.message.slice(0, 200) : e}`,
+    );
   }
 
   // 5. Verify installed version
@@ -281,17 +302,21 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
       { cwd: repoRoot, timeout: 5_000 },
     );
     installedVersion = stdout.trim();
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // 6. Generate patch
   let patch = '';
   try {
-    const { stdout } = await execAsync(
-      `git diff HEAD -- ${changedFiles.join(' ')} yarn.lock`,
-      { cwd: repoRoot, timeout: 10_000 },
-    );
+    const { stdout } = await execAsync(`git diff HEAD -- ${changedFiles.join(' ')} yarn.lock`, {
+      cwd: repoRoot,
+      timeout: 10_000,
+    });
     patch = stdout;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // 7. Write output files
   const outputDir = join(state.outputDir ?? 'output', state.jiraKey || `run-${Date.now()}`);
@@ -305,7 +330,7 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
   return {
     messages: [summary],
     affectedFiles: [...changedFiles, 'yarn.lock'],
-    branchName,  // already created above — openPr will commit + push it
+    branchName, // already created above — openPr will commit + push it
     fixSummary: `Upgrade ${packageName} to ${resolvedVersion} to patch ${state.jiraKey || 'CVE'}`,
     testsPassed: true,
     lintPassed: true,
@@ -336,26 +361,51 @@ async function implementBatchDepUpgrade(state: State): Promise<Partial<State>> {
       const { mkdirSync, existsSync } = await import('node:fs');
       mkdirSync(resolve(repoRoot, '..'), { recursive: true });
       if (existsSync(resolve(repoRoot, '.git'))) {
-        await execAsync(`git -C ${JSON.stringify(repoRoot)} fetch --all --prune`, { timeout: 120_000 });
+        await execAsync(`git -C ${JSON.stringify(repoRoot)} fetch --all --prune`, {
+          timeout: 120_000,
+        });
       } else {
-        await execAsync(`git clone ${JSON.stringify(authedUrl)} ${JSON.stringify(repoRoot)}`, { timeout: 300_000 });
+        await execAsync(`git clone ${JSON.stringify(authedUrl)} ${JSON.stringify(repoRoot)}`, {
+          timeout: 300_000,
+        });
       }
     } catch (e) {
-      return { messages: [`batch_dep_upgrade: git fetch failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`], status: 'failed' };
+      return {
+        messages: [
+          `batch_dep_upgrade: git fetch failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`,
+        ],
+        status: 'failed',
+      };
     }
   }
 
   // Create batch branch
-  const issueKeys = batchIssues.map(i => i.jiraKey || i.url.split('/').pop()).slice(0, 5).join('-');
+  const issueKeys = batchIssues
+    .map(i => i.jiraKey || i.url.split('/').pop())
+    .slice(0, 5)
+    .join('-');
   const branchName = `cve-batch-${issueKeys}-deps`.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 80);
 
   try {
     await execAsync(`git -C ${JSON.stringify(repoRoot)} fetch --all --prune`, { timeout: 60_000 });
-    await execAsync(`git -C ${JSON.stringify(repoRoot)} checkout ${defaultBranch} && git -C ${JSON.stringify(repoRoot)} reset --hard origin/${defaultBranch}`, { timeout: 30_000 });
-    await execAsync(`git -C ${JSON.stringify(repoRoot)} branch -D ${branchName} 2>/dev/null || true`, { timeout: 10_000 });
-    await execAsync(`git -C ${JSON.stringify(repoRoot)} checkout -b ${branchName}`, { timeout: 10_000 });
+    await execAsync(
+      `git -C ${JSON.stringify(repoRoot)} checkout ${defaultBranch} && git -C ${JSON.stringify(repoRoot)} reset --hard origin/${defaultBranch}`,
+      { timeout: 30_000 },
+    );
+    await execAsync(
+      `git -C ${JSON.stringify(repoRoot)} branch -D ${branchName} 2>/dev/null || true`,
+      { timeout: 10_000 },
+    );
+    await execAsync(`git -C ${JSON.stringify(repoRoot)} checkout -b ${branchName}`, {
+      timeout: 10_000,
+    });
   } catch (e) {
-    return { messages: [`batch_dep_upgrade: branch setup failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`], status: 'failed' };
+    return {
+      messages: [
+        `batch_dep_upgrade: branch setup failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`,
+      ],
+      status: 'failed',
+    };
   }
 
   // Extract package names from all batch issue titles/summaries
@@ -381,7 +431,9 @@ async function implementBatchDepUpgrade(state: State): Promise<Partial<State>> {
     try {
       const { stdout } = await execAsync(`npm info ${packageName} version`, { timeout: 10_000 });
       resolvedVersion = stdout.trim();
-    } catch { if (!resolvedVersion) continue; }
+    } catch {
+      if (!resolvedVersion) continue;
+    }
 
     // Find and update package.json files
     const pkgFiles = await findPackageJsonWith(repoRoot, packageName);
@@ -413,14 +465,21 @@ async function implementBatchDepUpgrade(state: State): Promise<Partial<State>> {
   try {
     await execAsync('yarn install --silent', { cwd: repoRoot, timeout: 180_000 });
   } catch (e) {
-    return { messages: [`batch_dep_upgrade: yarn install failed — ${e instanceof Error ? e.message : String(e)}`], status: 'failed' };
+    return {
+      messages: [
+        `batch_dep_upgrade: yarn install failed — ${e instanceof Error ? e.message : String(e)}`,
+      ],
+      status: 'failed',
+    };
   }
 
   // Regenerate license files — required when yarn.lock changes (che-dashboard rule §3)
   try {
     await execAsync('yarn license:generate', { cwd: repoRoot, timeout: 120_000 });
   } catch (e) {
-    console.warn(`[batch-dep-upgrade] yarn license:generate failed — ${e instanceof Error ? e.message.slice(0, 200) : e}`);
+    console.warn(
+      `[batch-dep-upgrade] yarn license:generate failed — ${e instanceof Error ? e.message.slice(0, 200) : e}`,
+    );
   }
 
   const upgradeList = upgrades.map(u => `${u.packageName}@${u.resolvedVersion}`).join(', ');

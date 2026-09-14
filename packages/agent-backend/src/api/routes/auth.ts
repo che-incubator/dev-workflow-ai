@@ -46,7 +46,11 @@ async function resolveGithubUser(): Promise<GithubUser | null> {
     });
     if (res.ok) {
       const gh = (await res.json()) as { login: string; name: string | null; avatar_url: string };
-      _cachedGithubUser = { login: gh.login, name: gh.name || gh.login, avatar: gh.avatar_url ?? '' };
+      _cachedGithubUser = {
+        login: gh.login,
+        name: gh.name || gh.login,
+        avatar: gh.avatar_url ?? '',
+      };
       console.log(`[auth] GitHub identity resolved: ${_cachedGithubUser.login}`);
       return _cachedGithubUser;
     }
@@ -86,5 +90,4 @@ export const authRoutes: FastifyPluginAsync = async app => {
       avatar: '',
     });
   });
-
 };

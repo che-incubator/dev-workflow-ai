@@ -1,5 +1,17 @@
 /*
  * Copyright (c) 2026 Red Hat, Inc.
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Red Hat, Inc. - initial API and implementation
+ */
+
+/*
+ * Copyright (c) 2026 Red Hat, Inc.
  * SPDX-License-Identifier: EPL-2.0
  */
 
@@ -23,7 +35,10 @@ const unloadedState: State = {
 
 export const reducer = createReducer(unloadedState, builder =>
   builder
-    .addCase(fetchRuns.pending, state => { state.loading = true; state.error = null; })
+    .addCase(fetchRuns.pending, state => {
+      state.loading = true;
+      state.error = null;
+    })
     .addCase(fetchRuns.fulfilled, (state, action) => {
       state.loading = false;
       state.items = action.payload;

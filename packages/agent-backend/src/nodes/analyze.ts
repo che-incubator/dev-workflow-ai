@@ -54,16 +54,16 @@ function buildPureLLM() {
 
 export async function analyzeNode(state: State): Promise<Partial<State>> {
   const context = await loadContext(state.project, [
-    'context',                  // project description, stack, local_path
-    'rules-issue-analysis',     // shared: how to identify affected files and scope
-    'rules-issue-filtering',    // shared: scoring rules, priority boosts, CVE handling
-    'rules-cve-batch',          // shared: CVE batch rules and priority
-    'skills-analyze-issue',     // project-specific analyze skill (if present)
+    'context', // project description, stack, local_path
+    'rules-issue-analysis', // shared: how to identify affected files and scope
+    'rules-issue-filtering', // shared: scoring rules, priority boosts, CVE handling
+    'rules-cve-batch', // shared: CVE batch rules and priority
+    'skills-analyze-issue', // project-specific analyze skill (if present)
   ]);
 
   // Fetch issue data — try DB first (works for Jira + GitHub), then GitHub API
   let issueTitle = state.issueTitle ?? '';
-  let issueBody  = state.issueBody  ?? '';
+  let issueBody = state.issueBody ?? '';
 
   if ((!issueTitle || !issueBody) && (state.jiraKey || state.issueUrl)) {
     try {
@@ -74,9 +74,11 @@ export async function analyzeNode(state: State): Promise<Partial<State>> {
       );
       if (rows[0]) {
         issueTitle = issueTitle || rows[0].title;
-        issueBody  = issueBody  || rows[0].body;
+        issueBody = issueBody || rows[0].body;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
   if (!issueBody && state.issueNumber) {
     issueBody = await fetchIssueBody(state.repoSlug, state.issueNumber);

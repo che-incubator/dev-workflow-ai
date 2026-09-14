@@ -1,6 +1,13 @@
 /*
  * Copyright (c) 2026 Red Hat, Inc.
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
  * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Red Hat, Inc. - initial API and implementation
  */
 
 import { randomUUID } from 'node:crypto';
@@ -77,8 +84,17 @@ async function triggerAutorun(): Promise<void> {
     [threadId, project, repoKey ?? '', issueNumber, issueUrl],
   );
 
-  runAgentInBackground(threadId, project, issueNumber, false, dryRun, outputDir, repoKey, issueUrl, jiraKey)
-    .catch(e => console.error(`[autorun ${threadId}] Unhandled error:`, e));
+  runAgentInBackground(
+    threadId,
+    project,
+    issueNumber,
+    false,
+    dryRun,
+    outputDir,
+    repoKey,
+    issueUrl,
+    jiraKey,
+  ).catch(e => console.error(`[autorun ${threadId}] Unhandled error:`, e));
 
   console.log(`[autorun] Scheduled run ${threadId} started for: ${issue.url}`);
 }
@@ -93,7 +109,10 @@ export function startAutorunScheduler(): void {
       const timesStr = await getSetting('autorunTimes', '');
       if (!timesStr) return;
 
-      const times = timesStr.split(',').map(t => t.trim()).filter(Boolean);
+      const times = timesStr
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean);
       if (times.length === 0) return;
 
       const now = new Date();

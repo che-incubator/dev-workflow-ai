@@ -110,9 +110,18 @@ export async function runAgentInBackground(
 
   if (!config && !repoSlugOverride) {
     const errMsg = `Project "${project}" not found in database`;
-    await db.query("UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1", [threadId]);
-    await db.query('INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)',
-      [threadId, 'error', 'error', errMsg]).catch(() => {});
+    await db.query(
+      "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
+      [threadId],
+    );
+    await db
+      .query('INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)', [
+        threadId,
+        'error',
+        'error',
+        errMsg,
+      ])
+      .catch(() => {});
     emitRunEvent(threadId, { type: 'run_failed', threadId, payload: { error: errMsg } });
     return;
   }
@@ -133,9 +142,7 @@ export async function runAgentInBackground(
   // Acquire per-repo lock: only one run may work on a given local repo at a time.
   // Other runs wait (up to 10 min) then proceed. The lock also resets the repo
   // to the default branch so each run starts from a clean state.
-  const releaseRepoLock = repoLocal
-    ? await acquireRepoLock(repoLocal, threadId)
-    : () => {};
+  const releaseRepoLock = repoLocal ? await acquireRepoLock(repoLocal, threadId) : () => {};
 
   if (repoLocal) {
     const defaultBranch = config?.default_branch ?? 'main';
@@ -252,10 +259,14 @@ export async function runAgentInBackground(
         "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
         [threadId],
       );
-      await db.query(
-        'INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)',
-        [threadId, 'error', 'error', `Agent failed: ${msg}`],
-      ).catch(() => {});
+      await db
+        .query('INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)', [
+          threadId,
+          'error',
+          'error',
+          `Agent failed: ${msg}`,
+        ])
+        .catch(() => {});
       emitRunEvent(threadId, { type: 'run_failed', threadId, payload: { error: msg } });
       console.error(`[run ${threadId}] Agent failed:`, err);
     }
@@ -266,9 +277,18 @@ export async function runAgentInBackground(
 
   // Also store "not found" errors from the early exit path
   async function failRun(tid: string, errMsg: string): Promise<void> {
-    await db.query("UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1", [tid]);
-    await db.query('INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)',
-      [tid, 'error', 'error', errMsg]).catch(() => {});
+    await db.query(
+      "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
+      [tid],
+    );
+    await db
+      .query('INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)', [
+        tid,
+        'error',
+        'error',
+        errMsg,
+      ])
+      .catch(() => {});
     emitRunEvent(tid, { type: 'run_failed', tid, payload: { error: errMsg } });
   }
   void failRun; // suppress unused warning — used indirectly
@@ -278,146 +298,166 @@ const tags = ['Runs'];
 
 export const runsRoutes: FastifyPluginAsync = async app => {
   // GET / — list runs
-  app.get<{ Querystring: { limit?: string; offset?: string } }>('/', { schema: { tags } }, async (req, reply) => {
-    const limit = Math.min(parseInt(req.query.limit ?? '20', 10), 100);
-    const offset = parseInt(req.query.offset ?? '0', 10);
-    const { rows } = await db.query<AgentRunRow>(
-      'SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset],
-    );
-    const { rows: countRows } = await db.query<{ count: string }>(
-      'SELECT COUNT(*) FROM agent_runs',
-    );
-    return reply.send({ runs: rows, total: parseInt(countRows[0].count, 10) });
-  });
+  app.get<{ Querystring: { limit?: string; offset?: string } }>(
+    '/',
+    { schema: { tags } },
+    async (req, reply) => {
+      const limit = Math.min(parseInt(req.query.limit ?? '20', 10), 100);
+      const offset = parseInt(req.query.offset ?? '0', 10);
+      const { rows } = await db.query<AgentRunRow>(
+        'SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT $1 OFFSET $2',
+        [limit, offset],
+      );
+      const { rows: countRows } = await db.query<{ count: string }>(
+        'SELECT COUNT(*) FROM agent_runs',
+      );
+      return reply.send({ runs: rows, total: parseInt(countRows[0].count, 10) });
+    },
+  );
 
   // GET /:threadId — single run with events and findings
-  app.get<{ Params: { threadId: string } }>('/:threadId', { schema: { tags } }, async (req, reply) => {
-    const { threadId } = req.params;
-    const { rows: runRows } = await db.query<AgentRunRow>(
-      'SELECT * FROM agent_runs WHERE thread_id = $1',
-      [threadId],
-    );
-    if (!runRows[0]) return reply.status(404).send({ error: 'Run not found' });
+  app.get<{ Params: { threadId: string } }>(
+    '/:threadId',
+    { schema: { tags } },
+    async (req, reply) => {
+      const { threadId } = req.params;
+      const { rows: runRows } = await db.query<AgentRunRow>(
+        'SELECT * FROM agent_runs WHERE thread_id = $1',
+        [threadId],
+      );
+      if (!runRows[0]) return reply.status(404).send({ error: 'Run not found' });
 
-    const { rows: events } = await db.query<RunEventRow>(
-      'SELECT * FROM run_events WHERE thread_id = $1 ORDER BY ts ASC',
-      [threadId],
-    );
-    const { rows: findings } = await db.query<FindingRow>(
-      'SELECT * FROM findings WHERE thread_id = $1 ORDER BY ts ASC',
-      [threadId],
-    );
+      const { rows: events } = await db.query<RunEventRow>(
+        'SELECT * FROM run_events WHERE thread_id = $1 ORDER BY ts ASC',
+        [threadId],
+      );
+      const { rows: findings } = await db.query<FindingRow>(
+        'SELECT * FROM findings WHERE thread_id = $1 ORDER BY ts ASC',
+        [threadId],
+      );
 
-    return reply.send({ ...runRows[0], events, findings });
-  });
+      return reply.send({ ...runRows[0], events, findings });
+    },
+  );
 
   // POST / — start a run
   // Accepts: { project, issueNumber?, forcePriority?, outputDir? }
   //       OR { issueUrl: "https://github.com/owner/repo/issues/N", forcePriority? }
-  app.post<{ Body: StartRunBody }>('/', { schema: { tags, body: startRunSchema } }, async (req, reply) => {
-    const { issueUrl, forcePriority, outputDir } = req.body;
-    let { project, issueNumber } = req.body;
+  app.post<{ Body: StartRunBody }>(
+    '/',
+    { schema: { tags, body: startRunSchema } },
+    async (req, reply) => {
+      const { issueUrl, forcePriority, outputDir } = req.body;
+      let { project, issueNumber } = req.body;
 
-    // ── Parse issueUrl if provided ─────────────────────────────────────────
-    let repoSlugOverride: string | undefined;
-    if (issueUrl) {
-      const ghParsed = parseIssueUrl(issueUrl);
-      if (ghParsed) {
-        const repoKey = `${ghParsed.owner}/${ghParsed.repo}`;
-        project = project ?? REPO_TO_PROJECT[repoKey] ?? ghParsed.repo;
-        issueNumber = issueNumber ?? ghParsed.number;
-        repoSlugOverride = repoKey;
-      } else {
-        const jiraParsed = parseJiraUrl(issueUrl);
-        if (jiraParsed) {
-          project = project ?? (await projectForJiraKey(jiraParsed.key)) ?? undefined;
+      // ── Parse issueUrl if provided ─────────────────────────────────────────
+      let repoSlugOverride: string | undefined;
+      if (issueUrl) {
+        const ghParsed = parseIssueUrl(issueUrl);
+        if (ghParsed) {
+          const repoKey = `${ghParsed.owner}/${ghParsed.repo}`;
+          project = project ?? REPO_TO_PROJECT[repoKey] ?? ghParsed.repo;
+          issueNumber = issueNumber ?? ghParsed.number;
+          repoSlugOverride = repoKey;
         } else {
-          return reply.status(400).send({ error: `Cannot parse issue URL: ${issueUrl}` });
+          const jiraParsed = parseJiraUrl(issueUrl);
+          if (jiraParsed) {
+            project = project ?? (await projectForJiraKey(jiraParsed.key)) ?? undefined;
+          } else {
+            return reply.status(400).send({ error: `Cannot parse issue URL: ${issueUrl}` });
+          }
         }
       }
-    }
 
-    if (!project) return reply.status(400).send({ error: 'project or issueUrl is required' });
+      if (!project) return reply.status(400).send({ error: 'project or issueUrl is required' });
 
-    // ── Dry-run when no GITHUB_TOKEN ───────────────────────────────────────
-    const dryRun = !process.env.GITHUB_TOKEN;
-    const resolvedOutputDir = outputDir ?? process.env.OUTPUT_DIR ?? 'output';
+      // ── Dry-run when no GITHUB_TOKEN ───────────────────────────────────────
+      const dryRun = !process.env.GITHUB_TOKEN;
+      const resolvedOutputDir = outputDir ?? process.env.OUTPUT_DIR ?? 'output';
 
-    const config = await loadProjectConfig(project);
-    const repo = repoSlugOverride ?? config?.repo ?? '';
+      const config = await loadProjectConfig(project);
+      const repo = repoSlugOverride ?? config?.repo ?? '';
 
-    const threadId = randomUUID();
+      const threadId = randomUUID();
 
-    await db.query(
-      `INSERT INTO agent_runs (thread_id, project_slug, repo, issue_number, issue_url, status)
+      await db.query(
+        `INSERT INTO agent_runs (thread_id, project_slug, repo, issue_number, issue_url, status)
        VALUES ($1, $2, $3, $4, $5, 'running')`,
-      [threadId, project, repo, issueNumber ?? null, issueUrl ?? ''],
-    );
+        [threadId, project, repo, issueNumber ?? null, issueUrl ?? ''],
+      );
 
-    if (dryRun) {
-      // Notify UI immediately
-      emitRunEvent(threadId, {
-        type: 'log',
+      if (dryRun) {
+        // Notify UI immediately
+        emitRunEvent(threadId, {
+          type: 'log',
+          threadId,
+          payload: {
+            level: 'warn',
+            message:
+              '⚠ GITHUB_TOKEN not set — running in dry-run mode. Output written to output/ directory.',
+          },
+        });
+      }
+
+      // Fire and forget
+      const jiraParsedKey = issueUrl ? parseJiraUrl(issueUrl)?.key : undefined;
+      runAgentInBackground(
         threadId,
-        payload: {
-          level: 'warn',
-          message:
-            '⚠ GITHUB_TOKEN not set — running in dry-run mode. Output written to output/ directory.',
-        },
-      });
-    }
+        project,
+        issueNumber ?? null,
+        forcePriority ?? false,
+        dryRun,
+        resolvedOutputDir,
+        repoSlugOverride,
+        issueUrl,
+        jiraParsedKey,
+      ).catch(e => console.error(`[run ${threadId}] Unhandled error:`, e));
 
-    // Fire and forget
-    const jiraParsedKey = issueUrl ? parseJiraUrl(issueUrl)?.key : undefined;
-    runAgentInBackground(
-      threadId,
-      project,
-      issueNumber ?? null,
-      forcePriority ?? false,
-      dryRun,
-      resolvedOutputDir,
-      repoSlugOverride,
-      issueUrl,
-      jiraParsedKey,
-    ).catch(e => console.error(`[run ${threadId}] Unhandled error:`, e));
-
-    return reply.status(202).send({ threadId, dryRun });
-  });
+      return reply.status(202).send({ threadId, dryRun });
+    },
+  );
 
   // DELETE /:threadId — cancel a running run (soft); hard-delete a finished run
-  app.delete<{ Params: { threadId: string } }>('/:threadId', { schema: { tags } }, async (req, reply) => {
-    const { threadId } = req.params;
-    try {
-      const { rows } = await db.query<{ status: string }>(
-        'SELECT status FROM agent_runs WHERE thread_id = $1',
-        [threadId],
-      );
-      const status = rows[0]?.status;
-      if (status === 'running') {
-        // Update DB first so the graph loop sees 'failed' if it checks
-        await db.query(
-          "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
+  app.delete<{ Params: { threadId: string } }>(
+    '/:threadId',
+    { schema: { tags } },
+    async (req, reply) => {
+      const { threadId } = req.params;
+      try {
+        const { rows } = await db.query<{ status: string }>(
+          'SELECT status FROM agent_runs WHERE thread_id = $1',
           [threadId],
         );
-        // Signal the running AbortController so the for-await loop exits
-        const ctrl = runningJobs.get(threadId);
-        if (ctrl) {
-          ctrl.abort();
-          runningJobs.delete(threadId);
+        const status = rows[0]?.status;
+        if (status === 'running') {
+          // Update DB first so the graph loop sees 'failed' if it checks
+          await db.query(
+            "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
+            [threadId],
+          );
+          // Signal the running AbortController so the for-await loop exits
+          const ctrl = runningJobs.get(threadId);
+          if (ctrl) {
+            ctrl.abort();
+            runningJobs.delete(threadId);
+          }
+          emitRunEvent(threadId, {
+            type: 'run_failed',
+            threadId,
+            payload: { error: 'Cancelled by user' },
+          });
+        } else {
+          await db.query('DELETE FROM run_events WHERE thread_id = $1', [threadId]).catch(() => {});
+          await db.query('DELETE FROM findings WHERE thread_id = $1', [threadId]).catch(() => {});
+          await db.query('DELETE FROM agent_runs WHERE thread_id = $1', [threadId]).catch(() => {});
         }
-        emitRunEvent(threadId, { type: 'run_failed', threadId, payload: { error: 'Cancelled by user' } });
-      } else {
-        await db.query('DELETE FROM run_events WHERE thread_id = $1', [threadId]).catch(() => {});
-        await db.query('DELETE FROM findings WHERE thread_id = $1', [threadId]).catch(() => {});
-        await db.query('DELETE FROM agent_runs WHERE thread_id = $1', [threadId]).catch(() => {});
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return reply.status(500).send({ error: `Failed to delete run: ${msg}` });
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return reply.status(500).send({ error: `Failed to delete run: ${msg}` });
-    }
-    return reply.status(204).send();
-  });
+      return reply.status(204).send();
+    },
+  );
 
   // POST /autorun — pick the top-scored open issue and start a run
   app.post('/autorun', { schema: { tags } }, async (_req, reply) => {
@@ -469,8 +509,15 @@ export const runsRoutes: FastifyPluginAsync = async app => {
     );
 
     runAgentInBackground(
-      threadId, project, issueNumber, false, dryRun, resolvedOutputDir,
-      repoKey, issueUrl, jiraKey,
+      threadId,
+      project,
+      issueNumber,
+      false,
+      dryRun,
+      resolvedOutputDir,
+      repoKey,
+      issueUrl,
+      jiraKey,
     ).catch(e => console.error(`[autorun ${threadId}] Unhandled error:`, e));
 
     console.log(`[autorun] Started run ${threadId} for issue: ${issueUrl}`);
@@ -511,7 +558,8 @@ export const runsRoutes: FastifyPluginAsync = async app => {
       repoKey = `${ghParsed.owner}/${ghParsed.repo}`;
       project = REPO_TO_PROJECT[repoKey] ?? ghParsed.repo;
     } else if (jiraParsed) {
-      project = (await projectForJiraKey(jiraParsed.key)) ?? jiraParsed.key.split('-')[0].toLowerCase();
+      project =
+        (await projectForJiraKey(jiraParsed.key)) ?? jiraParsed.key.split('-')[0].toLowerCase();
     } else {
       return reply.status(400).send({ error: `Cannot parse first CVE issue URL: ${firstUrl}` });
     }
@@ -539,8 +587,15 @@ export const runsRoutes: FastifyPluginAsync = async app => {
     const batchFixSummary = `Batch fix ${cveRows.length} CVE issues: ${cveRows.map(r => r.external_id || r.title.slice(0, 30)).join(', ')}`;
 
     runAgentInBackground(
-      threadId, project, null, true, dryRun, resolvedOutputDir,
-      repoKey, primaryIssue.url, primaryJiraKey,
+      threadId,
+      project,
+      null,
+      true,
+      dryRun,
+      resolvedOutputDir,
+      repoKey,
+      primaryIssue.url,
+      primaryJiraKey,
       { isBatch: true, batchIssues, fixSummary: batchFixSummary },
     ).catch(e => console.error(`[cve-batch ${threadId}] Unhandled error:`, e));
 

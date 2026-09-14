@@ -44,9 +44,14 @@ import {
   Title,
   Tooltip,
 } from '@patternfly/react-core';
-import { CubesIcon, PencilAltIcon, PlusCircleIcon, SyncAltIcon, TrashIcon } from '@patternfly/react-icons';
 import {
-  AgentRun,
+  CubesIcon,
+  PencilAltIcon,
+  PlusCircleIcon,
+  SyncAltIcon,
+  TrashIcon,
+} from '@patternfly/react-icons';
+import {
   createProject,
   deleteProject,
   getProjects,
@@ -61,9 +66,9 @@ const PRIORITY_OPTS = ['critical', 'major', 'minor', 'trivial'];
 
 const PRIORITY_COLOR: Record<string, string> = {
   critical: 'var(--pf-t--global--color--status--danger--default)',
-  major:    'var(--pf-t--global--color--status--warning--default)',
-  minor:    'var(--pf-t--global--color--status--info--default)',
-  trivial:  'var(--pf-t--global--text--color--subtle)',
+  major: 'var(--pf-t--global--color--status--warning--default)',
+  minor: 'var(--pf-t--global--color--status--info--default)',
+  trivial: 'var(--pf-t--global--text--color--subtle)',
 };
 
 function ownerFromRepo(repo: string): string {
@@ -148,7 +153,16 @@ export default function Projects() {
 
   const loadRuns = () =>
     getRuns()
-      .then(runs => setRunningRepos(new Set(runs.filter(r => r.status === 'running').map(r => r.repo).filter(Boolean))))
+      .then(runs =>
+        setRunningRepos(
+          new Set(
+            runs
+              .filter(r => r.status === 'running')
+              .map(r => r.repo)
+              .filter(Boolean),
+          ),
+        ),
+      )
       .catch(() => {});
 
   useEffect(() => {
@@ -160,9 +174,7 @@ export default function Projects() {
 
   const filtered = useMemo(
     () =>
-      projects
-        .filter(p => projectMatches(p, filter))
-        .sort((a, b) => a.repo.localeCompare(b.repo)),
+      projects.filter(p => projectMatches(p, filter)).sort((a, b) => a.repo.localeCompare(b.repo)),
     [projects, filter],
   );
 
@@ -242,10 +254,17 @@ export default function Projects() {
           justifyContent={{ default: 'justifyContentSpaceBetween' }}
         >
           <FlexItem>
-            <Title headingLevel="h1" size="xl">Subprojects</Title>
+            <Title headingLevel="h1" size="xl">
+              Subprojects
+            </Title>
           </FlexItem>
           <FlexItem>
-            <Button variant="link" icon={<PlusCircleIcon />} iconPosition="start" onClick={() => setShowAdd(true)}>
+            <Button
+              variant="link"
+              icon={<PlusCircleIcon />}
+              iconPosition="start"
+              onClick={() => setShowAdd(true)}
+            >
               Add project
             </Button>
           </FlexItem>
@@ -254,7 +273,11 @@ export default function Projects() {
 
       <PageSection>
         {!loading && projects.length > 0 && (
-          <Flex alignItems={{ default: 'alignItemsCenter' }} gap={{ default: 'gapMd' }} className={styles.filterRow}>
+          <Flex
+            alignItems={{ default: 'alignItemsCenter' }}
+            gap={{ default: 'gapMd' }}
+            className={styles.filterRow}
+          >
             <FlexItem>
               <TextInput
                 ref={filterRef}
@@ -275,7 +298,9 @@ export default function Projects() {
 
         {loading ? (
           <Flex justifyContent={{ default: 'justifyContentCenter' }} style={{ marginTop: '2rem' }}>
-            <FlexItem><Spinner aria-label="Loading projects" /></FlexItem>
+            <FlexItem>
+              <Spinner aria-label="Loading projects" />
+            </FlexItem>
           </Flex>
         ) : filtered.length === 0 ? (
           <EmptyState>
@@ -300,7 +325,11 @@ export default function Projects() {
                         actions: (
                           <ActionList isIconList>
                             <ActionListItem>
-                              <Tooltip content={isRepoRunning ? 'Agent is running on this repo' : 'Clone / pull'}>
+                              <Tooltip
+                                content={
+                                  isRepoRunning ? 'Agent is running on this repo' : 'Clone / pull'
+                                }
+                              >
                                 <Button
                                   variant="plain"
                                   aria-label="Update repo"
@@ -313,13 +342,21 @@ export default function Projects() {
                             </ActionListItem>
                             <ActionListItem>
                               <Tooltip content="Edit settings">
-                                <Button variant="plain" aria-label="Edit project" onClick={() => openEdit(p)}>
+                                <Button
+                                  variant="plain"
+                                  aria-label="Edit project"
+                                  onClick={() => openEdit(p)}
+                                >
                                   <PencilAltIcon />
                                 </Button>
                               </Tooltip>
                             </ActionListItem>
                             <ActionListItem>
-                              <Tooltip content={isRepoRunning ? 'Agent is running on this repo' : 'Delete project'}>
+                              <Tooltip
+                                content={
+                                  isRepoRunning ? 'Agent is running on this repo' : 'Delete project'
+                                }
+                              >
                                 <Button
                                   variant="plain"
                                   aria-label="Delete project"
@@ -352,18 +389,22 @@ export default function Projects() {
                       )}
 
                       {visibleStack.length > 0 && (
-                        <Flex gap={{ default: 'gapXs' }} flexWrap={{ default: 'nowrap' }} className={styles.stackRow}>
+                        <Flex
+                          gap={{ default: 'gapXs' }}
+                          flexWrap={{ default: 'nowrap' }}
+                          className={styles.stackRow}
+                        >
                           {visibleStack.map(t => (
                             <FlexItem key={t}>
-                              <Badge isRead className={styles.stackBadge}>{t}</Badge>
+                              <Badge isRead className={styles.stackBadge}>
+                                {t}
+                              </Badge>
                             </FlexItem>
                           ))}
                         </Flex>
                       )}
 
-                      {p.description && (
-                        <p className={styles.description}>{p.description}</p>
-                      )}
+                      {p.description && <p className={styles.description}>{p.description}</p>}
 
                       <p className={styles.meta}>
                         Auto-approve: <strong>{p.auto_approve_min_priority}</strong>
@@ -396,7 +437,12 @@ export default function Projects() {
       </PageSection>
 
       {/* ── Add Project modal ── */}
-      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} variant="small" aria-labelledby="add-project-title">
+      <Modal
+        isOpen={showAdd}
+        onClose={() => setShowAdd(false)}
+        variant="small"
+        aria-labelledby="add-project-title"
+      >
         <ModalHeader title="Add Project" labelId="add-project-title" />
         <ModalBody>
           <Form>
@@ -441,16 +487,27 @@ export default function Projects() {
           </Form>
         </ModalBody>
         <ModalFooter>
-          <Button variant="primary" isDisabled={saving || !form.name || !form.repo} onClick={handleAdd}>
+          <Button
+            variant="primary"
+            isDisabled={saving || !form.name || !form.repo}
+            onClick={handleAdd}
+          >
             {saving ? 'Saving…' : 'Add Project'}
           </Button>
-          <Button variant="link" onClick={() => setShowAdd(false)}>Cancel</Button>
+          <Button variant="link" onClick={() => setShowAdd(false)}>
+            Cancel
+          </Button>
         </ModalFooter>
       </Modal>
 
       {/* ── Edit modal ── */}
       {editTarget && (
-        <Modal isOpen onClose={() => setEditTarget(null)} variant="small" aria-labelledby="edit-project-title">
+        <Modal
+          isOpen
+          onClose={() => setEditTarget(null)}
+          variant="small"
+          aria-labelledby="edit-project-title"
+        >
           <ModalHeader title={`Edit — ${editTarget.name}`} labelId="edit-project-title" />
           <ModalBody>
             <Form>
@@ -480,20 +537,31 @@ export default function Projects() {
             <Button variant="primary" isDisabled={editSaving} onClick={handleEdit}>
               {editSaving ? 'Saving…' : 'Update'}
             </Button>
-            <Button variant="link" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button variant="link" onClick={() => setEditTarget(null)}>
+              Cancel
+            </Button>
           </ModalFooter>
         </Modal>
       )}
 
       {/* ── Delete confirmation ── */}
       {deleteTarget && (
-        <Modal isOpen onClose={() => setDeleteTarget(null)} variant="small" aria-labelledby="delete-project-title">
+        <Modal
+          isOpen
+          onClose={() => setDeleteTarget(null)}
+          variant="small"
+          aria-labelledby="delete-project-title"
+        >
           <ModalHeader title="Delete project?" labelId="delete-project-title" />
           <ModalBody>
             <p>
               Delete <strong>{deleteTarget.name}</strong>?
               {deleteTarget.local_path && (
-                <> The cloned repository at <code>{deleteTarget.local_path}</code> will also be removed.</>
+                <>
+                  {' '}
+                  The cloned repository at <code>{deleteTarget.local_path}</code> will also be
+                  removed.
+                </>
               )}
             </p>
           </ModalBody>
@@ -501,7 +569,9 @@ export default function Projects() {
             <Button variant="danger" isDisabled={deleting} onClick={handleDelete}>
               {deleting ? 'Deleting…' : 'Delete'}
             </Button>
-            <Button variant="link" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="link" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
           </ModalFooter>
         </Modal>
       )}
@@ -538,7 +608,10 @@ function AutoApproveRow({
             id={priorityId}
             isOpen={priorityOpen}
             selected={priorityValue}
-            onSelect={(_e, val) => { onPriorityChange(String(val)); onPriorityToggle(false); }}
+            onSelect={(_e, val) => {
+              onPriorityChange(String(val));
+              onPriorityToggle(false);
+            }}
             onOpenChange={onPriorityToggle}
             toggle={(ref: React.Ref<HTMLButtonElement>) => (
               <MenuToggle

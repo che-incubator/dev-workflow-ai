@@ -1,5 +1,17 @@
 /*
  * Copyright (c) 2026 Red Hat, Inc.
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Red Hat, Inc. - initial API and implementation
+ */
+
+/*
+ * Copyright (c) 2026 Red Hat, Inc.
  * SPDX-License-Identifier: EPL-2.0
  */
 
@@ -48,7 +60,10 @@ export async function createProject(body: Partial<Project>): Promise<Project> {
 
 export async function updateProject(name: string, body: Partial<Project>): Promise<Project> {
   try {
-    return await apiFetch<Project>(`/projects/${name}`, { method: 'PATCH', body: JSON.stringify(body) });
+    return await apiFetch<Project>(`/projects/${name}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
   } catch (e) {
     throw new Error(`Failed to update project ${name}. ${getMessage(e)}`);
   }

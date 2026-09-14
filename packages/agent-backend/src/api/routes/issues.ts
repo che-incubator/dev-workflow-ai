@@ -82,55 +82,59 @@ function estimateStoryPoints(issue: GhIssue): number {
 const tags = ['Issues'];
 
 export const issuesRoutes: FastifyPluginAsync = async app => {
-  app.get<{ Querystring: { project?: string; cached?: string } }>('/', { schema: { tags } }, async (req, reply) => {
-    const { project } = req.query;
-    if (!project) return reply.status(400).send({ error: 'project query param required' });
+  app.get<{ Querystring: { project?: string; cached?: string } }>(
+    '/',
+    { schema: { tags } },
+    async (req, reply) => {
+      const { project } = req.query;
+      if (!project) return reply.status(400).send({ error: 'project query param required' });
 
-    const config = await loadProjectConfig(project);
-    if (!config) return reply.status(404).send({ error: `Project "${project}" not found` });
+      const config = await loadProjectConfig(project);
+      if (!config) return reply.status(404).send({ error: `Project "${project}" not found` });
 
-    const repo = config.repo;
-    if (!repo) return reply.status(400).send({ error: 'Project has no repo configured' });
+      const repo = config.repo;
+      if (!repo) return reply.status(400).send({ error: 'Project has no repo configured' });
 
-    const env = { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN ?? '' };
+      const env = { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN ?? '' };
 
-    let raw: string;
-    try {
-      const { stdout } = await execAsync(
-        `gh issue list --repo ${repo} --state open --json number,title,body,labels,assignees --limit 100`,
-        { env, timeout: 30_000 },
-      );
-      raw = stdout;
-    } catch (e: unknown) {
-      const err = e as { stderr?: string; message?: string };
-      return reply
-        .status(502)
-        .send({ error: `GitHub fetch failed: ${err.message ?? String(e)}`, detail: err.stderr });
-    }
+      let raw: string;
+      try {
+        const { stdout } = await execAsync(
+          `gh issue list --repo ${repo} --state open --json number,title,body,labels,assignees --limit 100`,
+          { env, timeout: 30_000 },
+        );
+        raw = stdout;
+      } catch (e: unknown) {
+        const err = e as { stderr?: string; message?: string };
+        return reply
+          .status(502)
+          .send({ error: `GitHub fetch failed: ${err.message ?? String(e)}`, detail: err.stderr });
+      }
 
-    let issues: GhIssue[];
-    try {
-      issues = JSON.parse(raw) as GhIssue[];
-    } catch {
-      return reply.status(502).send({ error: 'Failed to parse GitHub response' });
-    }
+      let issues: GhIssue[];
+      try {
+        issues = JSON.parse(raw) as GhIssue[];
+      } catch {
+        return reply.status(502).send({ error: 'Failed to parse GitHub response' });
+      }
 
-    const scored: ScoredIssue[] = issues
-      .filter(i => {
-        const labelNames = i.labels.map(l => l.name);
-        return !labelNames.some(n => FORBIDDEN_LABELS.has(n));
-      })
-      .map(i => ({
-        number: i.number,
-        title: i.title,
-        url: `https://github.com/${repo}/issues/${i.number}`,
-        labels: i.labels.map(l => l.name),
-        score: scoreIssue(i),
-        storyPoints: estimateStoryPoints(i),
-        unassigned: i.assignees.length === 0,
-      }))
-      .sort((a, b) => b.score - a.score);
+      const scored: ScoredIssue[] = issues
+        .filter(i => {
+          const labelNames = i.labels.map(l => l.name);
+          return !labelNames.some(n => FORBIDDEN_LABELS.has(n));
+        })
+        .map(i => ({
+          number: i.number,
+          title: i.title,
+          url: `https://github.com/${repo}/issues/${i.number}`,
+          labels: i.labels.map(l => l.name),
+          score: scoreIssue(i),
+          storyPoints: estimateStoryPoints(i),
+          unassigned: i.assignees.length === 0,
+        }))
+        .sort((a, b) => b.score - a.score);
 
-    return reply.send(scored);
-  });
+      return reply.send(scored);
+    },
+  );
 };

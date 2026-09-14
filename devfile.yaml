@@ -7,7 +7,7 @@ metadata:
 components:
   - name: tools
     container:
-      image: quay.io/oorel/dev-workflow-ai:latest
+      image: quay.io/devfile/universal-developer-image:ubi9-latest
       memoryLimit: 6G
       memoryRequest: 1024Mi
       cpuRequest: 1000m

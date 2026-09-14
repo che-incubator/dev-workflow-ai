@@ -40,10 +40,10 @@ async function buildPrDescription(state: State, isDraft: boolean): Promise<strin
 
   // Load PR template and description skill — only what the PR writer needs
   const prContext = await loadContext(state.project, [
-    'context-pr-template',    // .github/PULL_REQUEST_TEMPLATE.md
-    'skills-pr-description',  // writing style guide
+    'context-pr-template', // .github/PULL_REQUEST_TEMPLATE.md
+    'skills-pr-description', // writing style guide
     'skills-pr-test-section', // test section templates
-  ]).catch(() => '');  // non-fatal — fall back to template if context not loaded
+  ]).catch(() => ''); // non-fatal — fall back to template if context not loaded
 
   // Generate "What does this PR do?" using LLM for richer content
   let whatItDoes = state.fixSummary;
@@ -57,8 +57,9 @@ Changed files: ${state.affectedFiles.join(', ')}`
       : `che-dashboard PR. Fix summary: ${state.fixSummary}
 Area: ${state.area}. Changed files: ${state.affectedFiles.join(', ')}`;
 
-    const resp = await llmDeep.invoke([new HumanMessage(
-      `${prContext ? `PROJECT PR CONVENTIONS:\n${prContext}\n\n` : ''}Write the "What does this PR do?" section for a GitHub PR description.
+    const resp = await llmDeep.invoke([
+      new HumanMessage(
+        `${prContext ? `PROJECT PR CONVENTIONS:\n${prContext}\n\n` : ''}Write the "What does this PR do?" section for a GitHub PR description.
 Follow this style:
 - Lead with an action verb (Upgrades / Fixes / Adds / Removes)
 - For batch dep upgrades: numbered bold list, each entry = package + what CVE it fixes
@@ -69,7 +70,8 @@ PR context:
 ${context}
 
 Respond with ONLY the section content (no heading, no markdown code fences).`,
-    )]);
+      ),
+    ]);
     const text = typeof resp.content === 'string' ? resp.content : JSON.stringify(resp.content);
     if (text.trim()) whatItDoes = text.trim();
   } catch {
@@ -83,10 +85,11 @@ Respond with ONLY the section content (no heading, no markdown code fences).`,
 
   // Test plan — Template 4 (Dependency / CVE upgrade) from pr-test-section skill
   const isDepUpgrade = isBatch || /upgrad\w+|vulnerabilit|CVE/i.test(state.fixSummary);
-  const pkgList = state.affectedFiles
-    .filter(f => f.endsWith('package.json'))
-    .map(f => f.replace('packages/', '').replace('/package.json', ''))
-    .join(', ') || 'see package.json';
+  const pkgList =
+    state.affectedFiles
+      .filter(f => f.endsWith('package.json'))
+      .map(f => f.replace('packages/', '').replace('/package.json', ''))
+      .join(', ') || 'see package.json';
   const testPlan = isDepUpgrade
     ? `- No runtime logic changed — pure dependency upgrade.
 - \`yarn install\` resolves cleanly.
@@ -120,9 +123,11 @@ ${testPlan}
 
 #### Release Notes
 
-${isDepUpgrade
-  ? 'Updated vulnerable npm dependencies to address security vulnerabilities.'
-  : state.fixSummary}
+${
+  isDepUpgrade
+    ? 'Updated vulnerable npm dependencies to address security vulnerabilities.'
+    : state.fixSummary
+}
 
 #### Docs PR
 
@@ -160,7 +165,9 @@ async function writeExportFiles(state: State, prBody: string): Promise<void> {
       if (stdout.trim()) {
         await writeFile(join(dir, 'changes.patch'), stdout, 'utf8');
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   console.log(`[export] Output written to: ${dir}`);
@@ -179,7 +186,7 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
     ? state.jiraKey
     : state.issueNumber
       ? `#${state.issueNumber}`
-      : state.issueUrl ?? '';
+      : (state.issueUrl ?? '');
 
   const batchIssues = state.batchIssues ?? [];
   const batchRefs = batchIssues
@@ -196,16 +203,22 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
     '',
     batchIssues.length > 0
       ? batchIssues.map(i => `Closes ${i.url}`).join('\n')
-      : (issueRef ? `Closes ${issueRef}` : ''),
+      : issueRef
+        ? `Closes ${issueRef}`
+        : '',
     '',
     `Assisted-by: ${agentName()}`,
-  ].filter((line, i, arr) => !(line === '' && arr[i - 1] === '')).join('\n');
+  ]
+    .filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
+    .join('\n');
 
   // ── Export mode: write files, no git/GitHub operations ────────────────────
   if (executionMode === 'export') {
     await writeExportFiles(state, prBody);
     return {
-      messages: [`open_pr: export mode — PR description written to ${state.outputDir ?? 'output'}/`],
+      messages: [
+        `open_pr: export mode — PR description written to ${state.outputDir ?? 'output'}/`,
+      ],
       prUrl: '',
       prNumber: null,
     };
@@ -233,20 +246,40 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
         }
       } catch {
         patchPath = join(outDir, 'changes.patch');
-        await writeFile(patchPath, `# Patch generation failed\n# Run: git diff main...${state.branchName}\n`, 'utf8');
+        await writeFile(
+          patchPath,
+          `# Patch generation failed\n# Run: git diff main...${state.branchName}\n`,
+          'utf8',
+        );
       }
     }
 
     const analysisPath = join(outDir, 'analysis.md');
     await writeFile(
       analysisPath,
-      ['# Issue Analysis', '', `**Issue:** ${state.issueUrl}`, `**Area:** ${state.area}`, `**Story points:** ${state.storyPoints}`, '**Affected files:**', ...state.affectedFiles.map(f => `- ${f}`), '', '## Fix summary', '', state.fixSummary].join('\n'),
+      [
+        '# Issue Analysis',
+        '',
+        `**Issue:** ${state.issueUrl}`,
+        `**Area:** ${state.area}`,
+        `**Story points:** ${state.storyPoints}`,
+        '**Affected files:**',
+        ...state.affectedFiles.map(f => `- ${f}`),
+        '',
+        '## Fix summary',
+        '',
+        state.fixSummary,
+      ].join('\n'),
       'utf8',
     );
 
     console.log(`[dry-run] Output written to: ${outDir}`);
     return {
-      messages: [`dry-run: PR description → ${prMdPath}`, patchPath ? `dry-run: Patch → ${patchPath}` : 'dry-run: No patch', `dry-run: Analysis → ${analysisPath}`],
+      messages: [
+        `dry-run: PR description → ${prMdPath}`,
+        patchPath ? `dry-run: Patch → ${patchPath}` : 'dry-run: No patch',
+        `dry-run: Analysis → ${analysisPath}`,
+      ],
       prUrl: `file://${outDir}`,
       prNumber: null,
     };
@@ -254,7 +287,8 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
 
   // ── Normal mode: commit → push → open PR via GitHub API ──────────────────
   const cwd = state.repoLocal;
-  if (!cwd) return { messages: ['open_pr: repoLocal not set — cannot commit or push'], status: 'failed' };
+  if (!cwd)
+    return { messages: ['open_pr: repoLocal not set — cannot commit or push'], status: 'failed' };
   if (!state.branchName) return { messages: ['open_pr: branchName not set'], status: 'failed' };
 
   try {
@@ -280,7 +314,13 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
         'Content-Type': 'application/json',
         'User-Agent': 'dev-workflow-ai',
       },
-      body: JSON.stringify({ title: prTitle, body: prBody, head: state.branchName, base: 'main', draft: isDraft }),
+      body: JSON.stringify({
+        title: prTitle,
+        body: prBody,
+        head: state.branchName,
+        base: 'main',
+        draft: isDraft,
+      }),
     });
 
     if (!apiRes.ok) {
@@ -288,7 +328,7 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
       throw new Error(`GitHub API ${apiRes.status}: ${errBody.slice(0, 300)}`);
     }
 
-    const prData = await apiRes.json() as { html_url: string; number: number };
+    const prData = (await apiRes.json()) as { html_url: string; number: number };
     const prUrl = prData.html_url;
     const prNumber = prData.number;
 
@@ -299,7 +339,9 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
       await git(`git checkout ${defaultBranch}`, cwd);
       await git(`git branch -D ${state.branchName}`, cwd);
       console.log(`[open_pr] deleted local branch: ${state.branchName}`);
-    } catch { /* Non-fatal */ }
+    } catch {
+      /* Non-fatal */
+    }
 
     return { prUrl, prNumber, messages: [`open_pr: ${prUrl}${isDraft ? ' [DRAFT]' : ''}`] };
   } catch (e: unknown) {

@@ -51,11 +51,11 @@ interface ProviderRow {
 // ── Step 1+2: config validation (no network call) ─────────────────────────
 
 const MODEL_PATTERNS: Record<string, RegExp> = {
-  vertex:    /^claude-[\w.-]+@\d{8}$|^claude-[\w.-]+@default$/,
+  vertex: /^claude-[\w.-]+@\d{8}$|^claude-[\w.-]+@default$/,
   anthropic: /^claude-/,
-  openai:    /^gpt-|^o\d/,
-  gemini:    /^gemini-/,
-  ollama:    /.+/,  // any non-empty string
+  openai: /^gpt-|^o\d/,
+  gemini: /^gemini-/,
+  ollama: /.+/, // any non-empty string
 };
 
 function validateConfig(p: ProviderRow): string | null {
@@ -66,8 +66,12 @@ function validateConfig(p: ProviderRow): string | null {
   if (pattern && p.model && !pattern.test(p.model)) {
     return `Model ID "${p.model}" does not match expected format for ${p.provider_id}`;
   }
-  if (p.provider_id === 'vertex' && p.base_url && p.base_url !== 'global'
-      && !/^[a-z]+-[a-z]+\d?$/.test(p.base_url)) {
+  if (
+    p.provider_id === 'vertex' &&
+    p.base_url &&
+    p.base_url !== 'global' &&
+    !/^[a-z]+-[a-z]+\d?$/.test(p.base_url)
+  ) {
     return `Region "${p.base_url}" looks incorrect (expected e.g. "global", "us-east5")`;
   }
   return null;
@@ -85,9 +89,10 @@ async function probeProvider(p: ProviderRow): Promise<ProviderResult> {
       latency_ms: null,
       response_snippet: null,
       error: configError,
-      hint: p.provider_id !== 'ollama'
-        ? `Go to Settings → AI Providers → Edit ${p.label} → set the API key`
-        : null,
+      hint:
+        p.provider_id !== 'ollama'
+          ? `Go to Settings → AI Providers → Edit ${p.label} → set the API key`
+          : null,
     };
   }
 
@@ -99,11 +104,12 @@ async function probeProvider(p: ProviderRow): Promise<ProviderResult> {
       base_url: p.base_url,
       model: p.model,
     });
-    const result = await llm.invoke([new HumanMessage('Reply with exactly the word PONG and nothing else.')]);
+    const result = await llm.invoke([
+      new HumanMessage('Reply with exactly the word PONG and nothing else.'),
+    ]);
     const latency = Date.now() - t0;
-    const text = typeof result.content === 'string'
-      ? result.content
-      : JSON.stringify(result.content);
+    const text =
+      typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
     const snippet = text.slice(0, 80).trim();
     const coherent = snippet.toLowerCase().includes('pong');
     return {
@@ -113,7 +119,9 @@ async function probeProvider(p: ProviderRow): Promise<ProviderResult> {
       latency_ms: latency,
       response_snippet: snippet,
       error: coherent ? null : `Unexpected response (expected "PONG"): ${snippet}`,
-      hint: coherent ? null : `Model "${p.model}" may not be following instructions — try a different model ID`,
+      hint: coherent
+        ? null
+        : `Model "${p.model}" may not be following instructions — try a different model ID`,
     };
   } catch (e) {
     const latency = Date.now() - t0;
@@ -121,7 +129,12 @@ async function probeProvider(p: ProviderRow): Promise<ProviderResult> {
     let status: ProviderResult['status'] = 'network_error';
     let hint: string | null = null;
 
-    if (msg.includes('401') || msg.includes('403') || msg.includes('authentication') || msg.includes('api_key')) {
+    if (
+      msg.includes('401') ||
+      msg.includes('403') ||
+      msg.includes('authentication') ||
+      msg.includes('api_key')
+    ) {
       status = 'auth_error';
       hint = `Check the API key in Settings → AI Providers → Edit ${p.label}`;
     } else if (msg.includes('404') || msg.includes('not found') || msg.includes('not exist')) {
@@ -169,6 +182,9 @@ export async function autoActivateBestProvider(results: ProviderResult[]): Promi
   if (working.length === 0) return null;
   const best = working[0];
   await db.query('UPDATE llm_providers SET is_active = false, updated_at = now()');
-  await db.query('UPDATE llm_providers SET is_active = true, updated_at = now() WHERE provider_id = $1', [best.provider_id]);
+  await db.query(
+    'UPDATE llm_providers SET is_active = true, updated_at = now() WHERE provider_id = $1',
+    [best.provider_id],
+  );
   return best.provider_id;
 }

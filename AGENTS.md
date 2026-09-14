@@ -39,8 +39,8 @@ dev-workflow-ai/
 │   └── run-local-podman.sh          ← Run locally with Podman (pulls pre-built image)
 ├── scripts/
 │   ├── dev-api.sh                   ← Start API (PGlite, hot-reload)
-│   ├── init-db.ts                   ← Seed DB from pg_seed/
-│   └── run-issue-direct.ts          ← Run agent directly on an issue URL
+│   ├── init-db.js                   ← Seed DB from pg_seed/
+│   └── run-issue-direct.js          ← Run agent directly on an issue URL
 ├── devfile.yaml                     ← Eclipse Che DevWorkspace (PGlite, single container)
 └── .claude/                         ← Claude Code skills + rules for this repo
 ```

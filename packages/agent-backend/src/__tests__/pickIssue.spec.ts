@@ -128,49 +128,63 @@ describe('scoreIssue — label scoring', () => {
   });
 
   it('adds priority/critical boost of 5', () => {
-    const score = scoreIssue(makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/critical' }] }));
+    const score = scoreIssue(
+      makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/critical' }] }),
+    );
     expect(score).toBe(15); // 10 + 5
   });
 
   it('adds priority/major boost of 3', () => {
-    const score = scoreIssue(makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/major' }] }));
+    const score = scoreIssue(
+      makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/major' }] }),
+    );
     expect(score).toBe(13); // 10 + 3
   });
 
   it('priority/minor adds 0 (no change)', () => {
-    const withMinor  = scoreIssue(makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/minor' }] }));
+    const withMinor = scoreIssue(
+      makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/minor' }] }),
+    );
     const withoutPri = scoreIssue(makeIssue({ labels: [{ name: 'kind/bug' }] }));
     expect(withMinor).toBe(withoutPri);
   });
 
   it('priority/trivial subtracts 2', () => {
-    const score = scoreIssue(makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/trivial' }] }));
+    const score = scoreIssue(
+      makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/trivial' }] }),
+    );
     expect(score).toBe(8); // 10 - 2
   });
 
   it('adds 1 for good first issue', () => {
-    const score = scoreIssue(makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'good first issue' }] }));
+    const score = scoreIssue(
+      makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'good first issue' }] }),
+    );
     expect(score).toBe(11); // 10 + 1
   });
 
   it('ignores unrecognised labels (CVE, Security, area/dashboard-frontend)', () => {
-    const score = scoreIssue(makeIssue({
-      labels: [{ name: 'CVE' }, { name: 'Security' }, { name: 'area/dashboard-frontend' }],
-    }));
+    const score = scoreIssue(
+      makeIssue({
+        labels: [{ name: 'CVE' }, { name: 'Security' }, { name: 'area/dashboard-frontend' }],
+      }),
+    );
     expect(score).toBe(0);
   });
 
   it('CVE issue from setup-cve-test.sh scores 13 (kind/bug + priority/major)', () => {
     // Labels set by setup-cve-test.sh: CVE, Security, kind/bug, area/dashboard-frontend, priority/major
-    const score = scoreIssue(makeIssue({
-      labels: [
-        { name: 'CVE' },
-        { name: 'Security' },
-        { name: 'kind/bug' },
-        { name: 'area/dashboard-frontend' },
-        { name: 'priority/major' },
-      ],
-    }));
+    const score = scoreIssue(
+      makeIssue({
+        labels: [
+          { name: 'CVE' },
+          { name: 'Security' },
+          { name: 'kind/bug' },
+          { name: 'area/dashboard-frontend' },
+          { name: 'priority/major' },
+        ],
+      }),
+    );
     expect(score).toBe(13); // kind/bug=10 + priority/major=3; CVE/Security/area ignored
   });
 
@@ -181,8 +195,12 @@ describe('scoreIssue — label scoring', () => {
   });
 
   it('critical bug ranks higher than major bug', () => {
-    const critical = scoreIssue(makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/critical' }] }));
-    const major    = scoreIssue(makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/major' }] }));
+    const critical = scoreIssue(
+      makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/critical' }] }),
+    );
+    const major = scoreIssue(
+      makeIssue({ labels: [{ name: 'kind/bug' }, { name: 'priority/major' }] }),
+    );
     expect(critical).toBeGreaterThan(major);
   });
 });
@@ -266,8 +284,13 @@ describe('routeFromStart', () => {
 
 describe('routeAfterAnalysis', () => {
   const base: RouteState = {
-    issueNumber: 42, storyPoints: 2, status: 'idle',
-    testsPassed: false, lintPassed: false, retryCount: 0, reviewFindings: [],
+    issueNumber: 42,
+    storyPoints: 2,
+    status: 'idle',
+    testsPassed: false,
+    lintPassed: false,
+    retryCount: 0,
+    reviewFindings: [],
   };
 
   it('proceeds to priority_check for normal issue within budget', () => {
@@ -307,8 +330,13 @@ describe('routeAfterPriority', () => {
 
 describe('routeAfterImplement', () => {
   const base: RouteState = {
-    issueNumber: 1, storyPoints: 2, status: 'approved',
-    testsPassed: false, lintPassed: false, retryCount: 0, reviewFindings: [],
+    issueNumber: 1,
+    storyPoints: 2,
+    status: 'approved',
+    testsPassed: false,
+    lintPassed: false,
+    retryCount: 0,
+    reviewFindings: [],
   };
 
   it('opens PR when tests and lint both pass', () => {
@@ -316,23 +344,36 @@ describe('routeAfterImplement', () => {
   });
 
   it('retries when tests fail and retry count < 3', () => {
-    expect(routeAfterImplement({ ...base, testsPassed: false, lintPassed: true, retryCount: 0 })).toBe('implement');
-    expect(routeAfterImplement({ ...base, testsPassed: true, lintPassed: false, retryCount: 2 })).toBe('implement');
+    expect(
+      routeAfterImplement({ ...base, testsPassed: false, lintPassed: true, retryCount: 0 }),
+    ).toBe('implement');
+    expect(
+      routeAfterImplement({ ...base, testsPassed: true, lintPassed: false, retryCount: 2 }),
+    ).toBe('implement');
   });
 
   it('gives up and ends after 3 retries', () => {
-    expect(routeAfterImplement({ ...base, testsPassed: false, lintPassed: false, retryCount: 3 })).toBe(END);
+    expect(
+      routeAfterImplement({ ...base, testsPassed: false, lintPassed: false, retryCount: 3 }),
+    ).toBe(END);
   });
 
   it('does not open PR when only tests pass but lint fails', () => {
-    expect(routeAfterImplement({ ...base, testsPassed: true, lintPassed: false })).not.toBe('open_pr');
+    expect(routeAfterImplement({ ...base, testsPassed: true, lintPassed: false })).not.toBe(
+      'open_pr',
+    );
   });
 });
 
 describe('routeAfterReview', () => {
   const emptyState: RouteState = {
-    issueNumber: 1, storyPoints: 2, status: 'approved',
-    testsPassed: true, lintPassed: true, retryCount: 0, reviewFindings: [],
+    issueNumber: 1,
+    storyPoints: 2,
+    status: 'approved',
+    testsPassed: true,
+    lintPassed: true,
+    retryCount: 0,
+    reviewFindings: [],
   };
 
   it('ends when no findings', () => {
@@ -340,24 +381,34 @@ describe('routeAfterReview', () => {
   });
 
   it('ends when only warnings (no blocking)', () => {
-    expect(routeAfterReview({
-      ...emptyState,
-      reviewFindings: [{ severity: 'warning' }, { severity: 'suggestion' }],
-    })).toBe(END);
+    expect(
+      routeAfterReview({
+        ...emptyState,
+        reviewFindings: [{ severity: 'warning' }, { severity: 'suggestion' }],
+      }),
+    ).toBe(END);
   });
 
   it('routes to fix_feedback when any blocking finding exists', () => {
-    expect(routeAfterReview({
-      ...emptyState,
-      reviewFindings: [{ severity: 'blocking' }],
-    })).toBe('fix_feedback');
+    expect(
+      routeAfterReview({
+        ...emptyState,
+        reviewFindings: [{ severity: 'blocking' }],
+      }),
+    ).toBe('fix_feedback');
   });
 
   it('routes to fix_feedback even with mixed severities if any blocking', () => {
-    expect(routeAfterReview({
-      ...emptyState,
-      reviewFindings: [{ severity: 'warning' }, { severity: 'blocking' }, { severity: 'suggestion' }],
-    })).toBe('fix_feedback');
+    expect(
+      routeAfterReview({
+        ...emptyState,
+        reviewFindings: [
+          { severity: 'warning' },
+          { severity: 'blocking' },
+          { severity: 'suggestion' },
+        ],
+      }),
+    ).toBe('fix_feedback');
   });
 });
 
@@ -418,8 +469,13 @@ describe('end-to-end: pick simulation for 10 CVE issues', () => {
 
   it('CVE issue at 2 SP proceeds through analysis to priority_check', () => {
     const state: RouteState = {
-      issueNumber: 42, storyPoints: 2, status: 'idle',
-      testsPassed: false, lintPassed: false, retryCount: 0, reviewFindings: [],
+      issueNumber: 42,
+      storyPoints: 2,
+      status: 'idle',
+      testsPassed: false,
+      lintPassed: false,
+      retryCount: 0,
+      reviewFindings: [],
     };
     expect(routeAfterAnalysis(state)).toBe('priority_check');
   });

@@ -95,31 +95,34 @@ export const settingsRoutes: FastifyPluginAsync = async app => {
   });
 
   // POST /api/settings/samples/:name/load — import a sample into DB
-  app.post<{ Params: { name: string } }>('/samples/:name/load', { schema: { tags } }, async (req, reply) => {
-    // Prevent path traversal — ensure resolved path stays under SAMPLES_DIR
-    const samplePath = resolve(join(SAMPLES_DIR, req.params.name));
-    if (!samplePath.startsWith(SAMPLES_DIR + sep)) {
-      return reply.status(400).send({ error: 'Invalid sample name' });
-    }
+  app.post<{ Params: { name: string } }>(
+    '/samples/:name/load',
+    { schema: { tags } },
+    async (req, reply) => {
+      // Prevent path traversal — ensure resolved path stays under SAMPLES_DIR
+      const samplePath = resolve(join(SAMPLES_DIR, req.params.name));
+      if (!samplePath.startsWith(SAMPLES_DIR + sep)) {
+        return reply.status(400).send({ error: 'Invalid sample name' });
+      }
 
-    const s = await stat(samplePath).catch(() => null);
-    if (!s?.isDirectory()) {
-      return reply.status(404).send({ error: `Sample '${req.params.name}' not found` });
-    }
+      const s = await stat(samplePath).catch(() => null);
+      if (!s?.isDirectory()) {
+        return reply.status(404).send({ error: `Sample '${req.params.name}' not found` });
+      }
 
-    // Pass dir directly — no global env mutation (fixes thread-safety race)
-    const { importKnowledge } = await import('../../init/importKnowledge.js');
-    const result = await importKnowledge(samplePath);
-    return reply.send({
-      ok: true,
-      sample: req.params.name,
-      path: samplePath,
-      imported: result.imported,
-      projects: result.projects,
-      sources: result.sources,
-    });
-  });
-
+      // Pass dir directly — no global env mutation (fixes thread-safety race)
+      const { importKnowledge } = await import('../../init/importKnowledge.js');
+      const result = await importKnowledge(samplePath);
+      return reply.send({
+        ok: true,
+        sample: req.params.name,
+        path: samplePath,
+        imported: result.imported,
+        projects: result.projects,
+        sources: result.sources,
+      });
+    },
+  );
 
   // GET /api/settings/export — export all contexts as JSON
   app.get('/export', { schema: { tags } }, async (_req, reply) => {

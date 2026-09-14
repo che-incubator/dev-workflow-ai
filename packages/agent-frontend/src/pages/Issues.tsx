@@ -12,7 +12,6 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Badge,
   Button,
   Card,
   CardBody,
@@ -104,7 +103,7 @@ function shortenIssueUrl(url: string): string {
 
 interface QueueItem {
   key: string;
-  issueId: number | null;   // DB id, null while importing
+  issueId: number | null; // DB id, null while importing
   url: string;
   title: string;
   forceP: boolean;
@@ -153,13 +152,20 @@ function IssuesSourcesSection({
 
   function validateUrl(url: string): string {
     if (!url.trim()) return 'URL is required';
-    try { new URL(url.trim()); } catch { return 'Must be a valid URL (e.g. https://github.com/owner/repo)'; }
+    try {
+      new URL(url.trim());
+    } catch {
+      return 'Must be a valid URL (e.g. https://github.com/owner/repo)';
+    }
     return '';
   }
 
   async function handleAdd(): Promise<void> {
     const err = validateUrl(newUrl);
-    if (err) { setUrlError(err); return; }
+    if (err) {
+      setUrlError(err);
+      return;
+    }
     setUrlError('');
     setAdding(true);
     try {
@@ -226,26 +232,56 @@ function IssuesSourcesSection({
     <Card>
       <CardTitle>
         Issues Sources
-        <p style={{ color: 'var(--pf-t--global--text--color--subtle)', fontSize: '0.875rem', fontWeight: 'normal', margin: '4px 0 0 0' }}>
+        <p
+          style={{
+            color: 'var(--pf-t--global--text--color--subtle)',
+            fontSize: '0.875rem',
+            fontWeight: 'normal',
+            margin: '4px 0 0 0',
+          }}
+        >
           GitHub repositories and Jira boards to watch for issues. Sync to fetch the latest.
         </p>
       </CardTitle>
       <CardBody>
-        <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }} style={{ marginBottom: '12px' }}>
+        <Flex
+          gap={{ default: 'gapSm' }}
+          alignItems={{ default: 'alignItemsCenter' }}
+          style={{ marginBottom: '12px' }}
+        >
           <FlexItem flex={{ default: 'flex_1' }}>
             <TextInput
               id="sources-url-input"
               value={newUrl}
-              onChange={(_e, v) => { setNewUrl(v); if (urlError) setUrlError(''); }}
+              onChange={(_e, v) => {
+                setNewUrl(v);
+                if (urlError) setUrlError('');
+              }}
               placeholder="GitHub repository URL or Jira board URL"
               aria-label="New source URL"
               validated={urlError ? 'error' : 'default'}
-              onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleAdd();
+              }}
             />
-            {urlError && <span style={{ color: 'var(--pf-t--global--color--status--danger--default)', fontSize: '0.8rem' }}>{urlError}</span>}
+            {urlError && (
+              <span
+                style={{
+                  color: 'var(--pf-t--global--color--status--danger--default)',
+                  fontSize: '0.8rem',
+                }}
+              >
+                {urlError}
+              </span>
+            )}
           </FlexItem>
           <FlexItem>
-            <Button id="sources-add-btn" variant="primary" isDisabled={adding || !newUrl.trim()} onClick={handleAdd}>
+            <Button
+              id="sources-add-btn"
+              variant="primary"
+              isDisabled={adding || !newUrl.trim()}
+              onClick={handleAdd}
+            >
               {adding ? 'Adding…' : 'Add'}
             </Button>
           </FlexItem>
@@ -288,8 +324,11 @@ function IssuesSourcesSection({
             </FlexItem>
           </Flex>
         ) : filtered.length === 0 ? (
-          <EmptyState variant={EmptyStateVariant.sm} icon={CubesIcon}
-            titleText={sources.length === 0 ? 'No sources yet.' : 'No sources match the filter.'}>
+          <EmptyState
+            variant={EmptyStateVariant.sm}
+            icon={CubesIcon}
+            titleText={sources.length === 0 ? 'No sources yet.' : 'No sources match the filter.'}
+          >
             <EmptyStateBody>
               {sources.length === 0 ? 'Add a GitHub or Jira URL above.' : ''}
             </EmptyStateBody>
@@ -330,7 +369,9 @@ function IssuesSourcesSection({
                       {src.label}
                     </a>
                   </Td>
-                  <Td>{src.last_synced_at ? new Date(src.last_synced_at).toLocaleString() : 'Never'}</Td>
+                  <Td>
+                    {src.last_synced_at ? new Date(src.last_synced_at).toLocaleString() : 'Never'}
+                  </Td>
                   <Td isActionCell>
                     <Dropdown
                       isOpen={openKebab === src.id}
@@ -349,10 +390,21 @@ function IssuesSourcesSection({
                       popperProps={{ position: 'right' }}
                     >
                       <DropdownList>
-                        <DropdownItem onClick={() => { void handleSync(src); setOpenKebab(null); }}>
+                        <DropdownItem
+                          onClick={() => {
+                            void handleSync(src);
+                            setOpenKebab(null);
+                          }}
+                        >
                           {syncing === src.id ? 'Syncing…' : 'Sync'}
                         </DropdownItem>
-                        <DropdownItem isDanger onClick={() => { void handleDeleteOne(src.id); setOpenKebab(null); }}>
+                        <DropdownItem
+                          isDanger
+                          onClick={() => {
+                            void handleDeleteOne(src.id);
+                            setOpenKebab(null);
+                          }}
+                        >
                           Delete
                         </DropdownItem>
                       </DropdownList>
@@ -375,8 +427,11 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
   const [inputUrl, setInputUrl] = useState('');
   const [forceP, setForceP] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem('dwa_picker_queue') ?? '[]') as QueueItem[]; }
-    catch { return []; }
+    try {
+      return JSON.parse(localStorage.getItem('dwa_picker_queue') ?? '[]') as QueueItem[];
+    } catch {
+      return [];
+    }
   });
   const [starting, setStarting] = useState<string | null>(null);
   const [queueFilter, setQueueFilter] = useState('');
@@ -393,27 +448,28 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
     queue.forEach(item => {
       importIssue(item.url)
         .then(issue => {
-          setQueue(prev => prev.map(i =>
-            i.key === item.key ? { ...i, issueId: issue.id, title: issue.title } : i));
+          setQueue(prev =>
+            prev.map(i =>
+              i.key === item.key ? { ...i, issueId: issue.id, title: issue.title } : i,
+            ),
+          );
           onIssueImported?.();
         })
         .catch(() => {
           if (item.issueId !== null) {
-            setQueue(prev => prev.map(i =>
-              i.key === item.key ? { ...i, issueId: null } : i));
+            setQueue(prev => prev.map(i => (i.key === item.key ? { ...i, issueId: null } : i)));
           }
         });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredQueue = useMemo(
-    () => queue.filter(i => !queueFilter || i.url.toLowerCase().includes(queueFilter.toLowerCase())),
+    () =>
+      queue.filter(i => !queueFilter || i.url.toLowerCase().includes(queueFilter.toLowerCase())),
     [queue, queueFilter],
   );
 
-  const allSelected =
-    filteredQueue.length > 0 && filteredQueue.every(i => selectedKeys.has(i.key));
+  const allSelected = filteredQueue.length > 0 && filteredQueue.every(i => selectedKeys.has(i.key));
 
   function handleSelectAll(checked: boolean): void {
     setSelectedKeys(checked ? new Set(filteredQueue.map(i => i.key)) : new Set());
@@ -422,7 +478,8 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
   function handleSelectOne(key: string, checked: boolean): void {
     setSelectedKeys(prev => {
       const next = new Set(prev);
-      if (checked) next.add(key); else next.delete(key);
+      if (checked) next.add(key);
+      else next.delete(key);
       return next;
     });
   }
@@ -435,12 +492,16 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
     setInputUrl('');
     importIssue(url)
       .then(issue => {
-        setQueue(prev => prev.map(i =>
-          i.key === key ? { ...i, issueId: issue.id, title: issue.title } : i));
+        setQueue(prev =>
+          prev.map(i => (i.key === key ? { ...i, issueId: issue.id, title: issue.title } : i)),
+        );
         onIssueImported?.();
       })
-      .catch(() => setQueue(prev => prev.map(i =>
-        i.key === key ? { ...i, title: shortenIssueUrl(url) } : i)));
+      .catch(() =>
+        setQueue(prev =>
+          prev.map(i => (i.key === key ? { ...i, title: shortenIssueUrl(url) } : i)),
+        ),
+      );
   }
 
   async function handleStart(item: QueueItem): Promise<void> {
@@ -453,7 +514,11 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
       const { threadId } = await startRun({ issueUrl: item.url, forcePriority: item.forceP });
       addAlert('success', `Run started — thread: ${threadId.slice(0, 8)}…`);
       setQueue(prev => prev.filter(q => q.key !== item.key));
-      setSelectedKeys(prev => { const n = new Set(prev); n.delete(item.key); return n; });
+      setSelectedKeys(prev => {
+        const n = new Set(prev);
+        n.delete(item.key);
+        return n;
+      });
     } catch (e) {
       addAlert('danger', e instanceof Error ? e.message : 'Failed to start run');
     } finally {
@@ -467,31 +532,48 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
       deleteIssue(item.issueId).catch(() => {});
     }
     setQueue(prev => prev.filter(q => q.key !== key));
-    setSelectedKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
+    setSelectedKeys(prev => {
+      const n = new Set(prev);
+      n.delete(key);
+      return n;
+    });
   }
 
   function handleBulkDelete(): void {
-    queue.filter(i => selectedKeys.has(i.key) && i.issueId !== null)
+    queue
+      .filter(i => selectedKeys.has(i.key) && i.issueId !== null)
       .forEach(i => deleteIssue(i.issueId!).catch(() => {}));
     setQueue(prev => prev.filter(i => !selectedKeys.has(i.key)));
     setSelectedKeys(new Set());
   }
 
   function handleTogglePriority(key: string): void {
-    setQueue(prev => prev.map(i => i.key === key ? { ...i, forceP: !i.forceP } : i));
+    setQueue(prev => prev.map(i => (i.key === key ? { ...i, forceP: !i.forceP } : i)));
   }
 
   return (
     <Card>
       <CardTitle>
         Issue Picker
-        <p style={{ color: 'var(--pf-t--global--text--color--subtle)', fontSize: '0.875rem', fontWeight: 'normal', margin: '4px 0 0 0' }}>
-          Queue specific issues to run. Paste a GitHub or Jira URL, choose the priority mode, then start each run individually.
+        <p
+          style={{
+            color: 'var(--pf-t--global--text--color--subtle)',
+            fontSize: '0.875rem',
+            fontWeight: 'normal',
+            margin: '4px 0 0 0',
+          }}
+        >
+          Queue specific issues to run. Paste a GitHub or Jira URL, choose the priority mode, then
+          start each run individually.
         </p>
       </CardTitle>
       <CardBody>
         {/* Add row */}
-        <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }} style={{ marginBottom: '12px' }}>
+        <Flex
+          gap={{ default: 'gapSm' }}
+          alignItems={{ default: 'alignItemsCenter' }}
+          style={{ marginBottom: '12px' }}
+        >
           <FlexItem flex={{ default: 'flex_1' }}>
             <TextInput
               id="queue-url-input"
@@ -499,11 +581,18 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
               onChange={(_e, v) => setInputUrl(v)}
               placeholder="GitHub issue URL or Jira URL"
               aria-label="Issue URL"
-              onKeyDown={e => { if (e.key === 'Enter') handleAddToQueue(); }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleAddToQueue();
+              }}
             />
           </FlexItem>
           <FlexItem>
-            <Button id="queue-add-btn" variant="primary" isDisabled={!inputUrl.trim()} onClick={handleAddToQueue}>
+            <Button
+              id="queue-add-btn"
+              variant="primary"
+              isDisabled={!inputUrl.trim()}
+              onClick={handleAddToQueue}
+            >
               Add
             </Button>
           </FlexItem>
@@ -511,7 +600,10 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
 
         <div
           onKeyDown={(e: React.KeyboardEvent) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setForceP(v => !v); }
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setForceP(v => !v);
+            }
           }}
           style={{ marginBottom: '12px' }}
         >
@@ -586,16 +678,29 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
                   />
                   <Td>
                     {item.url.startsWith('http') ? (
-                      <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem' }}>
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: '0.85rem' }}
+                      >
                         {shortenIssueUrl(item.url)}
                       </a>
-                    ) : item.url}
+                    ) : (
+                      item.url
+                    )}
                   </Td>
                   <Td>
                     {item.title ? (
                       <Tooltip
                         content={
-                          <div style={{ maxWidth: '400px', whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>
+                          <div
+                            style={{
+                              maxWidth: '400px',
+                              whiteSpace: 'pre-wrap',
+                              fontSize: '0.8rem',
+                            }}
+                          >
                             <strong>{item.title}</strong>
                           </div>
                         }
@@ -605,7 +710,9 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
                           {item.title.length > 80 ? item.title.slice(0, 77) + '…' : item.title}
                         </span>
                       </Tooltip>
-                    ) : <Spinner size="sm" aria-label="Loading title" />}
+                    ) : (
+                      <Spinner size="sm" aria-label="Loading title" />
+                    )}
                   </Td>
                   <Td>
                     <Label color={item.forceP ? 'orange' : 'blue'} isCompact>
@@ -632,18 +739,27 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
                       <DropdownList>
                         <DropdownItem
                           isDisabled={starting !== null}
-                          onClick={() => { void handleStart(item); setOpenKebab(null); }}
+                          onClick={() => {
+                            void handleStart(item);
+                            setOpenKebab(null);
+                          }}
                         >
                           {starting === item.key ? 'Starting…' : 'Force run'}
                         </DropdownItem>
                         <DropdownItem
-                          onClick={() => { handleTogglePriority(item.key); setOpenKebab(null); }}
+                          onClick={() => {
+                            handleTogglePriority(item.key);
+                            setOpenKebab(null);
+                          }}
                         >
                           {item.forceP ? 'Switch to Auto' : 'Switch to Force priority'}
                         </DropdownItem>
                         <DropdownItem
                           isDanger
-                          onClick={() => { handleRemove(item.key); setOpenKebab(null); }}
+                          onClick={() => {
+                            handleRemove(item.key);
+                            setOpenKebab(null);
+                          }}
                         >
                           Delete
                         </DropdownItem>
@@ -664,7 +780,15 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
 
 type IssueView = 'all' | 'prioritized' | 'skipped';
 
-function CveBatchButton({ cveCount, activeIssueUrls, cveUrls }: { cveCount: number; activeIssueUrls: Set<string>; cveUrls: Set<string> }) {
+function CveBatchButton({
+  cveCount,
+  activeIssueUrls,
+  cveUrls,
+}: {
+  cveCount: number;
+  activeIssueUrls: Set<string>;
+  cveUrls: Set<string>;
+}) {
   const { addAlert } = useAlerts();
   const [loading, setLoading] = React.useState(false);
   // Batch is running if any of the CVE issue URLs is currently in an active run
@@ -675,7 +799,10 @@ function CveBatchButton({ cveCount, activeIssueUrls, cveUrls }: { cveCount: numb
     setLoading(true);
     try {
       const result = await triggerCveBatch();
-      addAlert('success', `Batch CVE run started (${result.count} issues) — thread: ${result.threadId.slice(-8)}`);
+      addAlert(
+        'success',
+        `Batch CVE run started (${result.count} issues) — thread: ${result.threadId.slice(-8)}`,
+      );
     } catch (e) {
       addAlert('danger', e instanceof Error ? e.message : 'Batch CVE fix failed');
     } finally {
@@ -689,9 +816,21 @@ function CveBatchButton({ cveCount, activeIssueUrls, cveUrls }: { cveCount: numb
       variant="secondary"
       isDisabled={isDisabled}
       onClick={() => void handleBatch()}
-      title={batchAlreadyRunning ? 'A CVE batch run is already in progress' : cveCount <= 1 ? `Need ≥2 CVE issues (found ${cveCount})` : `Batch fix ${cveCount} CVE issues in one PR`}
+      title={
+        batchAlreadyRunning
+          ? 'A CVE batch run is already in progress'
+          : cveCount <= 1
+            ? `Need ≥2 CVE issues (found ${cveCount})`
+            : `Batch fix ${cveCount} CVE issues in one PR`
+      }
     >
-      {loading ? <><Spinner size="sm" /> Running…</> : `Batch CVE fix${cveCount > 1 ? ` (${cveCount})` : ''}`}
+      {loading ? (
+        <>
+          <Spinner size="sm" /> Running…
+        </>
+      ) : (
+        `Batch CVE fix${cveCount > 1 ? ` (${cveCount})` : ''}`
+      )}
     </Button>
   );
 }
@@ -710,14 +849,16 @@ function AllIssuesSection({
   const { addAlert } = useAlerts();
   const [view, setView] = useState<IssueView>('all');
 
-  const cveIssues = useMemo(() =>
-    issues.filter(i =>
-      i.status === 'open' && (
-        /CVE-\d{4}-\d+/i.test(i.title) ||
-        (i.labels ?? []).some(l => l === 'Security' || l === 'security')
-      )
-    ),
-  [issues]);
+  const cveIssues = useMemo(
+    () =>
+      issues.filter(
+        i =>
+          i.status === 'open' &&
+          (/CVE-\d{4}-\d+/i.test(i.title) ||
+            (i.labels ?? []).some(l => l === 'Security' || l === 'security')),
+      ),
+    [issues],
+  );
   const cveCount = cveIssues.length;
   // Set of CVE issue URLs to detect when a batch run is already in progress
   const cveUrls = useMemo(() => new Set(cveIssues.map(i => i.url)), [cveIssues]);
@@ -734,7 +875,9 @@ function AllIssuesSection({
   const COL_SP = 5;
   const PRIORITY_ORDER: Record<string, number> = { critical: 0, major: 1, minor: 2, trivial: 3 };
 
-  React.useEffect(() => { setLocalIssues(issues); }, [issues]);
+  React.useEffect(() => {
+    setLocalIssues(issues);
+  }, [issues]);
 
   const filtered = useMemo(() => {
     let list = localIssues.filter(i => issueMatches(i, search));
@@ -743,8 +886,10 @@ function AllIssuesSection({
     if (sortCol !== undefined) {
       list = [...list].sort((a, b) => {
         let cmp = 0;
-        if (sortCol === COL_OPENED) cmp = new Date(a.fetched_at).getTime() - new Date(b.fetched_at).getTime();
-        if (sortCol === COL_PRIORITY) cmp = (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
+        if (sortCol === COL_OPENED)
+          cmp = new Date(a.fetched_at).getTime() - new Date(b.fetched_at).getTime();
+        if (sortCol === COL_PRIORITY)
+          cmp = (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
         if (sortCol === COL_SP) cmp = (a.story_points || 0) - (b.story_points || 0);
         return sortDir === 'asc' ? cmp : -cmp;
       });
@@ -792,7 +937,14 @@ function AllIssuesSection({
     <Card>
       <CardTitle>
         All Issues
-        <p style={{ color: 'var(--pf-t--global--text--color--subtle)', fontSize: '0.875rem', fontWeight: 'normal', margin: '4px 0 0 0' }}>
+        <p
+          style={{
+            color: 'var(--pf-t--global--text--color--subtle)',
+            fontSize: '0.875rem',
+            fontWeight: 'normal',
+            margin: '4px 0 0 0',
+          }}
+        >
           Issues fetched from all sources. Prioritized = critical/major. Skipped = minor/trivial.
         </p>
       </CardTitle>
@@ -827,7 +979,9 @@ function AllIssuesSection({
                 </ToggleGroup>
               </FlexItem>
               <FlexItem>
-                <span style={{ fontSize: '0.85rem', color: 'var(--pf-t--global--text--color--subtle)' }}>
+                <span
+                  style={{ fontSize: '0.85rem', color: 'var(--pf-t--global--text--color--subtle)' }}
+                >
                   {filtered.length} {filtered.length === 1 ? 'item' : 'items'}
                 </span>
               </FlexItem>
@@ -836,18 +990,22 @@ function AllIssuesSection({
           <FlexItem>
             <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }}>
               <FlexItem>
-            <SearchInput
-              id="issues-filter"
-              placeholder="Filter by"
-              value={search}
-              onChange={(_e, v) => setSearch(v)}
-              onClear={() => setSearch('')}
-              aria-label="Filter issues"
-              style={{ width: '220px' }}
-            />
+                <SearchInput
+                  id="issues-filter"
+                  placeholder="Filter by"
+                  value={search}
+                  onChange={(_e, v) => setSearch(v)}
+                  onClear={() => setSearch('')}
+                  aria-label="Filter issues"
+                  style={{ width: '220px' }}
+                />
               </FlexItem>
               <FlexItem>
-                <CveBatchButton cveCount={cveCount} activeIssueUrls={activeIssueUrls} cveUrls={cveUrls} />
+                <CveBatchButton
+                  cveCount={cveCount}
+                  activeIssueUrls={activeIssueUrls}
+                  cveUrls={cveUrls}
+                />
               </FlexItem>
             </Flex>
           </FlexItem>
@@ -860,8 +1018,13 @@ function AllIssuesSection({
             </FlexItem>
           </Flex>
         ) : filtered.length === 0 ? (
-          <EmptyState variant={EmptyStateVariant.sm} icon={CubesIcon}
-            titleText={issues.length === 0 ? 'No issues yet.' : 'No issues match the current filter.'}>
+          <EmptyState
+            variant={EmptyStateVariant.sm}
+            icon={CubesIcon}
+            titleText={
+              issues.length === 0 ? 'No issues yet.' : 'No issues match the current filter.'
+            }
+          >
             <EmptyStateBody>
               {issues.length === 0 ? 'Add a source and sync it.' : ''}
             </EmptyStateBody>
@@ -872,10 +1035,46 @@ function AllIssuesSection({
               <Tr>
                 <Th>ID</Th>
                 <Th>Title</Th>
-                <Th sort={{ sortBy, columnIndex: COL_OPENED, onSort: (_e, col, dir) => { setSortCol(col); setSortDir(dir); } }} style={{ cursor: 'pointer' }}>Opened</Th>
+                <Th
+                  sort={{
+                    sortBy,
+                    columnIndex: COL_OPENED,
+                    onSort: (_e, col, dir) => {
+                      setSortCol(col);
+                      setSortDir(dir);
+                    },
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  Opened
+                </Th>
                 <Th>Labels</Th>
-                <Th sort={{ sortBy, columnIndex: COL_PRIORITY, onSort: (_e, col, dir) => { setSortCol(col); setSortDir(dir); } }} style={{ cursor: 'pointer' }}>Priority</Th>
-                <Th sort={{ sortBy, columnIndex: COL_SP, onSort: (_e, col, dir) => { setSortCol(col); setSortDir(dir); } }} style={{ cursor: 'pointer' }}>SP</Th>
+                <Th
+                  sort={{
+                    sortBy,
+                    columnIndex: COL_PRIORITY,
+                    onSort: (_e, col, dir) => {
+                      setSortCol(col);
+                      setSortDir(dir);
+                    },
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  Priority
+                </Th>
+                <Th
+                  sort={{
+                    sortBy,
+                    columnIndex: COL_SP,
+                    onSort: (_e, col, dir) => {
+                      setSortCol(col);
+                      setSortDir(dir);
+                    },
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  SP
+                </Th>
                 <Th screenReaderText="Actions" />
               </Tr>
             </Thead>
@@ -884,22 +1083,36 @@ function AllIssuesSection({
                 const key = String(issue.id);
                 const isStarting = starting === key;
                 const isRunning = activeIssueUrls.has(issue.url);
-                const shortTitle = issue.title.length > 60
-                  ? `${issue.title.slice(0, 60)}…`
-                  : issue.title;
+                const shortTitle =
+                  issue.title.length > 60 ? `${issue.title.slice(0, 60)}…` : issue.title;
                 return (
                   <Tr key={issue.id}>
                     <Td>
                       <a href={issue.url} target="_blank" rel="noreferrer">
-                        {issue.source_kind === 'github' ? `#${issue.external_id}` : issue.external_id}
+                        {issue.source_kind === 'github'
+                          ? `#${issue.external_id}`
+                          : issue.external_id}
                       </a>
                     </Td>
                     <Td>
                       <Tooltip
                         content={
-                          <div style={{ maxWidth: '400px', whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>
+                          <div
+                            style={{
+                              maxWidth: '400px',
+                              whiteSpace: 'pre-wrap',
+                              fontSize: '0.8rem',
+                            }}
+                          >
                             <strong>{issue.title}</strong>
-                            {issue.body ? <><br /><br />{issue.body.slice(0, 600)}{issue.body.length > 600 ? '…' : ''}</> : null}
+                            {issue.body ? (
+                              <>
+                                <br />
+                                <br />
+                                {issue.body.slice(0, 600)}
+                                {issue.body.length > 600 ? '…' : ''}
+                              </>
+                            ) : null}
                           </div>
                         }
                         position="bottom"
@@ -907,24 +1120,36 @@ function AllIssuesSection({
                         <div style={{ cursor: 'default' }}>{shortTitle}</div>
                       </Tooltip>
                     </Td>
-                    <Td style={{ whiteSpace: 'nowrap', color: 'var(--pf-t--global--text--color--subtle)', fontSize: '0.85rem' }}>
+                    <Td
+                      style={{
+                        whiteSpace: 'nowrap',
+                        color: 'var(--pf-t--global--text--color--subtle)',
+                        fontSize: '0.85rem',
+                      }}
+                    >
                       {formatOpened(issue.fetched_at)}
                     </Td>
                     <Td>
                       <Flex gap={{ default: 'gapXs' }}>
                         {issue.labels.slice(0, 3).map(l => (
-                          <FlexItem key={l}><Label isCompact>{l}</Label></FlexItem>
+                          <FlexItem key={l}>
+                            <Label isCompact>{l}</Label>
+                          </FlexItem>
                         ))}
                       </Flex>
                     </Td>
                     <Td>
-                      {isRunning
-                        ? <Label color="orange" isCompact>Running</Label>
-                        : issue.priority && (
+                      {isRunning ? (
+                        <Label color="orange" isCompact>
+                          Running
+                        </Label>
+                      ) : (
+                        issue.priority && (
                           <Label color={PRIORITY_COLOR[issue.priority] ?? 'grey'} isCompact>
                             {issue.priority}
                           </Label>
-                        )}
+                        )
+                      )}
                     </Td>
                     <Td>{issue.story_points || '?'}</Td>
                     <Td isActionCell>
@@ -947,26 +1172,40 @@ function AllIssuesSection({
                         <DropdownList>
                           <DropdownItem
                             isDisabled={starting !== null || isRunning}
-                            onClick={() => { void handleStart(issue); setOpenKebab(null); }}
+                            onClick={() => {
+                              void handleStart(issue);
+                              setOpenKebab(null);
+                            }}
                           >
                             {isRunning ? 'Running…' : isStarting ? 'Starting…' : 'Force run'}
                           </DropdownItem>
                           {view === 'prioritized' && !isRunning && (
-                            <DropdownItem onClick={() => { handleSkip(issue.id); setOpenKebab(null); }}>
+                            <DropdownItem
+                              onClick={() => {
+                                handleSkip(issue.id);
+                                setOpenKebab(null);
+                              }}
+                            >
                               Skip
                             </DropdownItem>
                           )}
                           {view === 'skipped' && (
                             <DropdownItem
                               isDisabled={starting !== null || isRunning}
-                              onClick={() => { void handleStart(issue, true); setOpenKebab(null); }}
+                              onClick={() => {
+                                void handleStart(issue, true);
+                                setOpenKebab(null);
+                              }}
                             >
                               Force priority
                             </DropdownItem>
                           )}
                           <DropdownItem
                             isDanger
-                            onClick={() => { void handleDelete(issue); setOpenKebab(null); }}
+                            onClick={() => {
+                              void handleDelete(issue);
+                              setOpenKebab(null);
+                            }}
                           >
                             Delete
                           </DropdownItem>
@@ -994,15 +1233,31 @@ export default function Issues() {
   const [issueLoading, setIssueLoading] = useState(true);
 
   const loadSources = useCallback(async () => {
-    try { setSources(await getSources()); } catch { /* ignore */ } finally { setSrcLoading(false); }
+    try {
+      setSources(await getSources());
+    } catch {
+      /* ignore */
+    } finally {
+      setSrcLoading(false);
+    }
   }, []);
 
   const loadIssues = useCallback(async () => {
-    try { setIssues(await getAllIssues()); } catch { /* ignore */ } finally { setIssueLoading(false); }
+    try {
+      setIssues(await getAllIssues());
+    } catch {
+      /* ignore */
+    } finally {
+      setIssueLoading(false);
+    }
   }, []);
 
   const loadRuns = useCallback(async () => {
-    try { setActiveRuns((await getRuns()).filter(r => r.status === 'running')); } catch { /* ignore */ }
+    try {
+      setActiveRuns((await getRuns()).filter(r => r.status === 'running'));
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   function handleReload(): void {
@@ -1026,7 +1281,9 @@ export default function Issues() {
   return (
     <>
       <PageSection>
-        <Title headingLevel="h1" size="xl">Issues</Title>
+        <Title headingLevel="h1" size="xl">
+          Issues
+        </Title>
       </PageSection>
 
       <PageSection>
@@ -1038,7 +1295,12 @@ export default function Issues() {
       </PageSection>
 
       <PageSection>
-        <AllIssuesSection issues={issues} loading={issueLoading} activeIssueUrls={activeIssueUrls} onRunStarted={loadRuns} />
+        <AllIssuesSection
+          issues={issues}
+          loading={issueLoading}
+          activeIssueUrls={activeIssueUrls}
+          onRunStarted={loadRuns}
+        />
       </PageSection>
     </>
   );

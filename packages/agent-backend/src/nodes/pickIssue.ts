@@ -59,7 +59,9 @@ export async function pickIssueNode(state: State): Promise<Partial<State>> {
   // If an issue was pre-specified (from issueUrl or issueNumber), skip LLM pick
   if (state.issueUrl || state.jiraKey || state.issueNumber) {
     return {
-      messages: [`pick_issue: using pre-specified issue — ${state.jiraKey || state.issueUrl || `#${state.issueNumber}`}`],
+      messages: [
+        `pick_issue: using pre-specified issue — ${state.jiraKey || state.issueUrl || `#${state.issueNumber}`}`,
+      ],
       status: 'running',
     };
   }

@@ -69,9 +69,10 @@ export function buildLLMFromProvider(cfg: ProviderConfig): BaseChatModel {
           console.warn('[vertex] GOOGLE_APPLICATION_CREDENTIALS_JSON is invalid JSON');
         }
       }
-      const region = (cfg.base_url && cfg.base_url !== 'global')
-        ? cfg.base_url
-        : (process.env.CLOUD_ML_REGION ?? 'global');
+      const region =
+        cfg.base_url && cfg.base_url !== 'global'
+          ? cfg.base_url
+          : (process.env.CLOUD_ML_REGION ?? 'global');
       return new VertexAnthropicLLM({
         projectId,
         region,
@@ -101,9 +102,8 @@ export function buildLLMFromProvider(cfg: ProviderConfig): BaseChatModel {
 
     case 'google':
     case 'gemini': {
-      const geminiKey = cfg.api_key
-        || process.env.GEMINI_API_KEY
-        || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+      const geminiKey =
+        cfg.api_key || process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
       if (!geminiKey)
         throw new Error('Gemini API key not set — configure it in Settings → AI Providers');
       return new ChatGoogleGenerativeAI({

@@ -85,7 +85,7 @@ After completing, respond with JSON only:
 
   return {
     // reviewFindings uses concat reducer so [] is a no-op; routing uses reviewVerdict (replace reducer)
-    reviewVerdict: '',  // reset so routeAfterReview re-evaluates after next review
+    reviewVerdict: '', // reset so routeAfterReview re-evaluates after next review
     filesChanged,
     retryCount: (state.retryCount ?? 0) + 1,
     messages: [

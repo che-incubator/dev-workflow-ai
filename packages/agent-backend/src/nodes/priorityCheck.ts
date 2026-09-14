@@ -88,14 +88,19 @@ export async function priorityCheckNode(state: State): Promise<Partial<State>> {
   let jiraKey = '';
 
   if (state.priority && state.priority in JIRA_PRIORITY_MAP) {
-    priority = JIRA_PRIORITY_MAP[
-      Object.keys(JIRA_PRIORITY_MAP).find(k =>
-        JIRA_PRIORITY_MAP[k] === state.priority as Priority
-      ) ?? ''
-    ] ?? state.priority as Priority;
+    priority =
+      JIRA_PRIORITY_MAP[
+        Object.keys(JIRA_PRIORITY_MAP).find(
+          k => JIRA_PRIORITY_MAP[k] === (state.priority as Priority),
+        ) ?? ''
+      ] ?? (state.priority as Priority);
     source = 'db';
-  } else if (state.priority === 'major' || state.priority === 'critical'
-          || state.priority === 'minor' || state.priority === 'trivial') {
+  } else if (
+    state.priority === 'major' ||
+    state.priority === 'critical' ||
+    state.priority === 'minor' ||
+    state.priority === 'trivial'
+  ) {
     priority = state.priority as Priority;
     source = 'db';
   }
@@ -111,8 +116,10 @@ export async function priorityCheckNode(state: State): Promise<Partial<State>> {
 
   // 2. Jira — use pre-parsed jiraKey from state first, then try issueBody
   if (!priority) {
-    const key = state.jiraKey || (state.issueBody ? extractJiraKey(state.issueBody) : null)
-      || (state.issueUrl ? extractJiraKey(state.issueUrl) : null);
+    const key =
+      state.jiraKey ||
+      (state.issueBody ? extractJiraKey(state.issueBody) : null) ||
+      (state.issueUrl ? extractJiraKey(state.issueUrl) : null);
     if (key) {
       jiraKey = key;
       const jiraPriority = await fetchJiraPriority(key);

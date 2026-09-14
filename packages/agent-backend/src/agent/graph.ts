@@ -31,7 +31,9 @@ function routeFromStart(state: State): 'pick_issue' | 'analyze' {
   return 'pick_issue';
 }
 
-function routeAfterAnalysis(state: State): 'priority_check' | 'implement' | 'implement_dep_upgrade' | typeof END {
+function routeAfterAnalysis(
+  state: State,
+): 'priority_check' | 'implement' | 'implement_dep_upgrade' | typeof END {
   const hasIssue = state.issueNumber !== null || !!state.jiraKey || !!state.issueUrl;
   if (!hasIssue) return END;
   if (state.storyPoints > 8) return END; // over hard limit
@@ -47,10 +49,14 @@ function routeAfterAnalysis(state: State): 'priority_check' | 'implement' | 'imp
 function isDepUpgrade(state: State): boolean {
   const summary = state.messages.find(m => m.startsWith('analyze:')) ?? '';
   // "Upgrade X to N.N.N" / "Upgrade X in Y to version N" / bump / CVE + version / vulnerability
-  return /upgrad\w+\s+\w[\w./]*(?:\s+(?:in|dependency|dep)\s+\S+)?\s+to\s+(?:version\s+)?[\d]/i.test(summary)
-    || /bump\s+\S+\s+to/i.test(summary)
-    || /vulnerabilit\w+/i.test(summary)
-    || (/(?:CVE|security)/i.test(summary) && /(?:version|upgrad)/i.test(summary));
+  return (
+    /upgrad\w+\s+\w[\w./]*(?:\s+(?:in|dependency|dep)\s+\S+)?\s+to\s+(?:version\s+)?[\d]/i.test(
+      summary,
+    ) ||
+    /bump\s+\S+\s+to/i.test(summary) ||
+    /vulnerabilit\w+/i.test(summary) ||
+    (/(?:CVE|security)/i.test(summary) && /(?:version|upgrad)/i.test(summary))
+  );
 }
 
 function routeAfterPriority(state: State): 'implement' | 'implement_dep_upgrade' | typeof END {
@@ -130,9 +136,10 @@ export async function buildGraph(databaseUrl?: string) {
       [END]: END,
     })
     // dep-upgrade agent goes to review on success, END on failure
-    .addConditionalEdges('implement_dep_upgrade',
-      (s: State) => (s.testsPassed && s.lintPassed) ? 'review' : END,
-      { review: 'review', [END]: END }
+    .addConditionalEdges(
+      'implement_dep_upgrade',
+      (s: State) => (s.testsPassed && s.lintPassed ? 'review' : END),
+      { review: 'review', [END]: END },
     )
     .addConditionalEdges('review', routeAfterReview, {
       fix_feedback: 'fix_feedback',

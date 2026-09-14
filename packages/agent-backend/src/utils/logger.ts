@@ -33,6 +33,7 @@ const logLevels = [
   'warn',
 ] as LevelWithSilent[];
 
+/* eslint-disable no-redeclare */
 export function updateLogLevel(logLevel: LevelWithSilent, server: FastifyInstance): void;
 export function updateLogLevel(logLevel: string, server: FastifyInstance): void;
 export function updateLogLevel(logLevel: LevelWithSilent | string, server: FastifyInstance): void {

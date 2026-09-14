@@ -175,7 +175,11 @@ export async function importKnowledge(
     const sharedRaw = await readFile(sharedSourcesFile, 'utf8');
     const sharedParsed = matter(sharedRaw);
     const urls = (sharedParsed.data as Record<string, unknown>).issue_sources;
-    const list = Array.isArray(urls) ? (urls as unknown[]).map(String) : typeof urls === 'string' ? [urls] : [];
+    const list = Array.isArray(urls)
+      ? (urls as unknown[]).map(String)
+      : typeof urls === 'string'
+        ? [urls]
+        : [];
     for (const u of list) {
       if (u) {
         configuredSourceUrls.add(u);
@@ -201,17 +205,22 @@ export async function importKnowledge(
 
   // Upsert shared sources so they exist even before sync
   for (const url of sharedSourcesList) {
-    const isJira = url.includes('atlassian.net') || url.includes('/jira/') || url.includes('/browse/');
-    const label = url.includes('/jira/for-you') ? 'Assigned to me'
-      : isJira ? new URL(url).hostname
-      : url.replace('https://github.com/', '');
+    const isJira =
+      url.includes('atlassian.net') || url.includes('/jira/') || url.includes('/browse/');
+    const label = url.includes('/jira/for-you')
+      ? 'Assigned to me'
+      : isJira
+        ? new URL(url).hostname
+        : url.replace('https://github.com/', '');
     const kind = isJira ? 'jira' : 'github';
-    await db.query(
-      `INSERT INTO issue_sources (url, kind, label, project_slug)
+    await db
+      .query(
+        `INSERT INTO issue_sources (url, kind, label, project_slug)
        VALUES ($1, $2, $3, '')
        ON CONFLICT (url) DO NOTHING`,
-      [url, kind, label],
-    ).catch(() => {});
+        [url, kind, label],
+      )
+      .catch(() => {});
     sourcesRegistered++;
   }
 

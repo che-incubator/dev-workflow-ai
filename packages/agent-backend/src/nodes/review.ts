@@ -82,10 +82,7 @@ async function runReviewer(prompt: string): Promise<Array<Finding & { confidence
 }
 
 export async function reviewNode(state: State): Promise<Partial<State>> {
-  const rulesContext = await loadContext(state.project, [
-    'rules-dev',
-    'skills-review-pr',
-  ]);
+  const rulesContext = await loadContext(state.project, ['rules-dev', 'skills-review-pr']);
   const config = await loadProjectConfig(state.project);
   const rawPath = config?.local_path ?? state.repoLocal ?? '';
   const repoRoot = rawPath.startsWith('/') ? rawPath : resolve(process.cwd(), rawPath);
@@ -113,7 +110,9 @@ export async function reviewNode(state: State): Promise<Partial<State>> {
           { timeout: 30_000 },
         );
         diffText = stdout.trim();
-      } catch { /* no diff available */ }
+      } catch {
+        /* no diff available */
+      }
     }
   }
 
@@ -146,13 +145,21 @@ Focus: bugs, logic errors, security vulnerabilities, null/undefined handling.
 Rate each issue 0-100 confidence. Only report ≥75.
 
 Checks:
-${isTS ? `- Unhandled promise rejections (missing await/catch) → confidence 90
+${
+  isTS
+    ? `- Unhandled promise rejections (missing await/catch) → confidence 90
 - Type assertions bypassing null checks ("as Type" without guard) → 85
 - SQL/HTML injection via string concatenation → 95
-- API routes without input validation → 85` : ''}
-${isGo ? `- Unchecked error returns ("_ =") → 95
+- API routes without input validation → 85`
+    : ''
+}
+${
+  isGo
+    ? `- Unchecked error returns ("_ =") → 95
 - Goroutines without cancellation → 85
-- Unchecked type assertions → 85` : ''}
+- Unchecked type assertions → 85`
+    : ''
+}
 - Hardcoded credentials or secrets → 95
 - Missing auth checks on new endpoints → 90
 - Race conditions in concurrent code → 85
@@ -209,20 +216,29 @@ PROJECT RULES:
 ${rulesContext}
 
 Check ONLY rule violations:
-${isTS ? `- Missing EPL-2.0 copyright header in new .ts/.tsx files → confidence 90, BLOCKING
+${
+  isTS
+    ? `- Missing EPL-2.0 copyright header in new .ts/.tsx files → confidence 90, BLOCKING
 - \`any\` type usage (": any", "as any", "<any>") → 95, BLOCKING
 - Relative imports ("from './" or "from '../") → 90, BLOCKING
 - PatternFly deep imports (@patternfly/*/dist/...) → 85, BLOCKING
-- No test file for new component or utility → 80, warning` : ''}
-${isGo ? `- Error returned but not checked at call site → 90, BLOCKING
-- Context not propagated to I/O function → 85, BLOCKING` : ''}
+- No test file for new component or utility → 80, warning`
+    : ''
+}
+${
+  isGo
+    ? `- Error returned but not checked at call site → 90, BLOCKING
+- Context not propagated to I/O function → 85, BLOCKING`
+    : ''
+}
 - Forbidden patterns from project rules above → match their severity
 
 ${JSON_SCHEMA}`;
 
   // ── Reviewer 5: TypeScript Type Design (TS projects only) ────────────────
   // Adapted from claude-code/plugins/pr-review-toolkit/agents/type-design-analyzer.md
-  const typeDesignPrompt = isTS ? `
+  const typeDesignPrompt = isTS
+    ? `
 You are a TypeScript type design expert. ${diffHeader}
 
 Analyze new and modified types/interfaces for design quality.
@@ -236,7 +252,8 @@ Check:
 - Missing discriminant on union type (hard to narrow) → 80, warning
 - Type that allows invalid states to be represented → 85, warning
 
-${JSON_SCHEMA}` : null;
+${JSON_SCHEMA}`
+    : null;
 
   // ── Run all reviewers in parallel ─────────────────────────────────────────
   const reviewerPromises = [
@@ -255,9 +272,7 @@ ${JSON_SCHEMA}` : null;
   const blocking = filtered.filter(f => f.severity === 'blocking').length;
   const filteredOut = all.length - filtered.length;
 
-  const verdict = blocking > 0 ? 'request-changes'
-    : filtered.length > 0    ? 'comment'
-    : 'approve';
+  const verdict = blocking > 0 ? 'request-changes' : filtered.length > 0 ? 'comment' : 'approve';
 
   return {
     reviewFindings: filtered,

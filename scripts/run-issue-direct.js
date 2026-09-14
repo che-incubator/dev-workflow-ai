@@ -1,4 +1,4 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 /*
  * Copyright (c) 2026 Red Hat, Inc.
  * This program and the accompanying materials are made
@@ -10,13 +10,14 @@
  * Contributors:
  *   Red Hat, Inc. - initial API and implementation
  */
+
 /**
- * run-issue-direct.ts — run the agent directly (no API server needed)
+ * run-issue-direct.js — run the agent directly (no API server needed)
  *
  * Usage:
- *   npx tsx scripts/run-issue-direct.ts https://github.com/eclipse-che/che/issues/20670
- *   npx tsx scripts/run-issue-direct.ts https://github.com/eclipse-che/che/issues/20670 --force-priority=true
- *   npx tsx scripts/run-issue-direct.ts https://github.com/eclipse-che/che/issues/20670 --project=che-dashboard
+ *   node scripts/run-issue-direct.js https://github.com/eclipse-che/che/issues/20670
+ *   node scripts/run-issue-direct.js https://github.com/eclipse-che/che/issues/20670 --force-priority=true
+ *   node scripts/run-issue-direct.js https://github.com/eclipse-che/che/issues/20670 --project=che-dashboard
  *
  * Requires env: DATABASE_URL (Postgres), GITHUB_TOKEN (optional — dry-run if absent)
  * For Ollama: OLLAMA_BASE_URL (default: http://localhost:11434), OLLAMA_MODEL
@@ -25,18 +26,21 @@
 import { runMigrations } from "../packages/agent-backend/src/db/migrations.js";
 import { importKnowledge } from "../packages/agent-backend/src/init/importKnowledge.js";
 import { buildGraph } from "../packages/agent-backend/src/agent/graph.js";
-import { State } from "../packages/agent-backend/src/agent/state.js";
 
 // ── Parse CLI args ─────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
-const issueUrl = args.find(a => a.startsWith("http"))  ?? "";
-const forcePriority = args.includes("--force-priority=true") || args.includes("--force-priority");
-const projectOverride = args.find(a => a.startsWith("--project="))?.split("=")[1] ?? "";
+const issueUrl = args.find(a => a.startsWith("http")) ?? "";
+const forcePriority =
+  args.includes("--force-priority=true") || args.includes("--force-priority");
+const projectOverride =
+  args.find(a => a.startsWith("--project="))?.split("=")[1] ?? "";
 const outputDir = args.find(a => a.startsWith("--output="))?.split("=")[1] ?? "output";
 
 if (!issueUrl) {
-  console.error("Usage: tsx scripts/run-issue-direct.ts <github-issue-url> [--force-priority] [--project=<slug>]");
+  console.error(
+    "Usage: node scripts/run-issue-direct.js <github-issue-url> [--force-priority] [--project=<slug>]",
+  );
   process.exit(1);
 }
 
@@ -51,15 +55,15 @@ const [, owner, repo, issueNumStr] = urlMatch;
 const issueNumber = parseInt(issueNumStr);
 const repoSlug = `${owner}/${repo}`;
 
-const REPO_TO_PROJECT: Record<string, string> = {
-  "eclipse-che/che-dashboard":         "che-dashboard",
-  "eclipse-che/che-server":            "che-server",
-  "eclipse-che/che":                   "che",
-  "eclipse-che/che-docs":              "che-docs",
-  "che-incubator/che-ai-tool-images":  "che-ai-tool-images",
+const REPO_TO_PROJECT = {
+  "eclipse-che/che-dashboard": "che-dashboard",
+  "eclipse-che/che-server": "che-server",
+  "eclipse-che/che": "che",
+  "eclipse-che/che-docs": "che-docs",
+  "che-incubator/che-ai-tool-images": "che-ai-tool-images",
   "che-incubator/devworkspace-generator": "devworkspace-generator",
-  "devfile/devworkspace-operator":     "devworkspace-operator",
-  "che-incubator/dash-licenses":       "dash-licenses",
+  "devfile/devworkspace-operator": "devworkspace-operator",
+  "che-incubator/dash-licenses": "dash-licenses",
 };
 
 const project = projectOverride || REPO_TO_PROJECT[repoSlug] || repo;
@@ -70,9 +74,13 @@ console.log("  dev-workflow-ai — direct run");
 console.log("─────────────────────────────────────────────");
 console.log(`  Issue:    ${issueUrl}`);
 console.log(`  Project:  ${project} (${repoSlug})`);
-console.log(`  Mode:     ${dryRun ? "DRY-RUN (no GITHUB_TOKEN)" : "LIVE (will push + create PR)"}`);
+console.log(
+  `  Mode:     ${dryRun ? "DRY-RUN (no GITHUB_TOKEN)" : "LIVE (will push + create PR)"}`,
+);
 if (dryRun) console.log(`  Output:   ./${outputDir}/`);
-console.log(`  Model:    ${process.env.OLLAMA_MODEL ?? "qwen2.5-coder:32b-q8_0"} @ ${process.env.OLLAMA_BASE_URL ?? "http://localhost:11434"}`);
+console.log(
+  `  Model:    ${process.env.OLLAMA_MODEL ?? "qwen2.5-coder:32b-q8_0"} @ ${process.env.OLLAMA_BASE_URL ?? "http://localhost:11434"}`,
+);
 console.log("─────────────────────────────────────────────");
 console.log();
 
@@ -94,10 +102,10 @@ if (process.env.DATABASE_URL) {
 const threadId = `direct-${Date.now()}`;
 const app = await buildGraph(process.env.DATABASE_URL ?? "");
 
-const initialState: Partial<State> = {
+const initialState = {
   project,
   repoSlug,
-  repoLocal: "", // agent will use gh CLI without local clone in dry-run
+  repoLocal: "",
   issueNumber,
   issueUrl,
   forcePriority,
@@ -110,32 +118,39 @@ console.log();
 
 let lastPhase = "";
 try {
-for await (const chunk of await app.stream(initialState, { configurable: { thread_id: threadId } })) {
-  for (const [nodeName, nodeOutput] of Object.entries(chunk as Record<string, Partial<State>>)) {
-    if (nodeName !== lastPhase) {
-      lastPhase = nodeName;
-      console.log(`\n── ${nodeName.toUpperCase()} ──`);
-    }
-    for (const msg of (nodeOutput.messages ?? [])) {
-      console.log("  ", msg);
-    }
-    if (nodeOutput.status && nodeOutput.status !== "idle") {
-      console.log(`  status: ${nodeOutput.status}`);
-    }
-    if (nodeOutput.prUrl) {
-      console.log(`  PR/output: ${nodeOutput.prUrl}`);
+  for await (const chunk of await app.stream(initialState, {
+    configurable: { thread_id: threadId },
+  })) {
+    for (const [nodeName, nodeOutput] of Object.entries(chunk)) {
+      if (nodeName !== lastPhase) {
+        lastPhase = nodeName;
+        console.log(`\n── ${nodeName.toUpperCase()} ──`);
+      }
+      for (const msg of nodeOutput.messages ?? []) {
+        console.log("  ", msg);
+      }
+      if (nodeOutput.status && nodeOutput.status !== "idle") {
+        console.log(`  status: ${nodeOutput.status}`);
+      }
+      if (nodeOutput.prUrl) {
+        console.log(`  PR/output: ${nodeOutput.prUrl}`);
+      }
     }
   }
-}
-
-} catch (err: unknown) {
+} catch (err) {
   const msg = err instanceof Error ? err.message : String(err);
-  const isLLMError = msg.includes("ECONNREFUSED") || msg.includes("fetch failed") || msg.includes("connect");
+  const isLLMError =
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("fetch failed") ||
+    msg.includes("connect");
   console.error("\n✗ Agent run failed:");
   if (isLLMError) {
     console.error("  LLM connection error — is Ollama running?");
     console.error(`  URL: ${process.env.OLLAMA_BASE_URL ?? "http://localhost:11434"}`);
-    console.error("  Fix: ollama serve && ollama pull " + (process.env.OLLAMA_MODEL ?? "qwen2.5-coder:32b-q8_0"));
+    console.error(
+      "  Fix: ollama serve && ollama pull " +
+        (process.env.OLLAMA_MODEL ?? "qwen2.5-coder:32b-q8_0"),
+    );
     console.error("  Or:  export ANTHROPIC_API_KEY=sk-ant-...");
   } else {
     console.error(" ", msg);

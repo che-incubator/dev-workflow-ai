@@ -1,7 +1,16 @@
 /*
  * Copyright (c) 2026 Red Hat, Inc.
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
  * SPDX-License-Identifier: EPL-2.0
  *
+ * Contributors:
+ *   Red Hat, Inc. - initial API and implementation
+ */
+
+/*
  * Repo-level mutex: only one agent run may work on a given local repo path
  * at a time. Others wait with exponential back-off.
  *
@@ -21,10 +30,7 @@ const MAX_WAIT_MS = 10 * 60_000; // give up after 10 min
  * Acquire the lock for `repoPath`. Waits until the lock is free.
  * @returns a release function — call it when the run is done.
  */
-export async function acquireRepoLock(
-  repoPath: string,
-  threadId: string,
-): Promise<() => void> {
+export async function acquireRepoLock(repoPath: string, threadId: string): Promise<() => void> {
   if (!repoPath) return () => {};
 
   const deadline = Date.now() + MAX_WAIT_MS;
@@ -43,12 +49,18 @@ export async function acquireRepoLock(
     }
 
     if (Date.now() > deadline) {
-      console.warn(`[repo-lock] timeout waiting for ${repoPath} (held by ${owner}) — proceeding anyway`);
+      console.warn(
+        `[repo-lock] timeout waiting for ${repoPath} (held by ${owner}) — proceeding anyway`,
+      );
       held.set(repoPath, threadId);
-      return () => { if (held.get(repoPath) === threadId) held.delete(repoPath); };
+      return () => {
+        if (held.get(repoPath) === threadId) held.delete(repoPath);
+      };
     }
 
-    console.log(`[repo-lock] ${repoPath} held by ${owner} — ${threadId} waiting ${POLL_INTERVAL_MS / 1000}s…`);
+    console.log(
+      `[repo-lock] ${repoPath} held by ${owner} — ${threadId} waiting ${POLL_INTERVAL_MS / 1000}s…`,
+    );
     await new Promise<void>(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
   }
 }
@@ -62,12 +74,14 @@ export function resetRepoBranch(repoPath: string, defaultBranch: string): void {
   try {
     execSync(
       `git -C ${JSON.stringify(repoPath)} fetch --all --prune && ` +
-      `git -C ${JSON.stringify(repoPath)} checkout ${defaultBranch} && ` +
-      `git -C ${JSON.stringify(repoPath)} reset --hard origin/${defaultBranch}`,
+        `git -C ${JSON.stringify(repoPath)} checkout ${defaultBranch} && ` +
+        `git -C ${JSON.stringify(repoPath)} reset --hard origin/${defaultBranch}`,
       { timeout: 60_000, stdio: 'pipe' },
     );
     console.log(`[repo-lock] reset ${repoPath} to ${defaultBranch}`);
   } catch (e) {
-    console.warn(`[repo-lock] reset failed for ${repoPath}: ${e instanceof Error ? e.message.slice(0, 150) : e}`);
+    console.warn(
+      `[repo-lock] reset failed for ${repoPath}: ${e instanceof Error ? e.message.slice(0, 150) : e}`,
+    );
   }
 }

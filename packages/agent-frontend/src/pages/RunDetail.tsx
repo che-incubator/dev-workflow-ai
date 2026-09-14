@@ -47,23 +47,16 @@ import {
   Finding,
 } from '../api/client.js';
 
-const PHASES = [
-  'Analyze',
-  'Implement',
-  'Review',
-  'Fix if needed',
-  'Open PR',
-  'Done',
-];
+const PHASES = ['Analyze', 'Implement', 'Review', 'Fix if needed', 'Open PR', 'Done'];
 
 // Map backend node names → phase display labels
 const NODE_TO_PHASE: Record<string, string> = {
-  analyze:               'Analyze',
-  implement:             'Implement',
+  analyze: 'Analyze',
+  implement: 'Implement',
   implement_dep_upgrade: 'Implement',
-  review:                'Review',
-  fix_feedback:          'Fix if needed',
-  open_pr:               'Open PR',
+  review: 'Review',
+  fix_feedback: 'Fix if needed',
+  open_pr: 'Open PR',
 };
 
 interface Props {
@@ -188,9 +181,7 @@ export default function RunDetail({ threadId: propThreadId, onBack }: Props) {
           </BreadcrumbItem>
           <BreadcrumbItem isActive>
             {run.project_slug}
-            {(run.jira_key || run.issue_number) && (
-              <> [{run.jira_key || `#${run.issue_number}`}]</>
-            )}
+            {(run.jira_key || run.issue_number) && <> [{run.jira_key || `#${run.issue_number}`}]</>}
           </BreadcrumbItem>
         </Breadcrumb>
         <Flex
@@ -200,7 +191,9 @@ export default function RunDetail({ threadId: propThreadId, onBack }: Props) {
         >
           <FlexItem>
             <Title headingLevel="h1" size="xl">
-              {run.issue_title || run.jira_key || (run.issue_number ? `Issue #${run.issue_number}` : run.issue_url || 'Run detail')}
+              {run.issue_title ||
+                run.jira_key ||
+                (run.issue_number ? `Issue #${run.issue_number}` : run.issue_url || 'Run detail')}
             </Title>
           </FlexItem>
           {run.status === 'running' && (
@@ -224,7 +217,12 @@ export default function RunDetail({ threadId: propThreadId, onBack }: Props) {
               <DescriptionListTerm>Issue</DescriptionListTerm>
               <DescriptionListDescription>
                 {run.issue_url ? (
-                  <a href={run.issue_url} target="_blank" rel="noreferrer" style={{ cursor: 'pointer' }}>
+                  <a
+                    href={run.issue_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ cursor: 'pointer' }}
+                  >
                     {run.issue_url}
                   </a>
                 ) : (
@@ -265,10 +263,13 @@ export default function RunDetail({ threadId: propThreadId, onBack }: Props) {
             <DescriptionListDescription>
               <Label
                 color={
-                  run.status === 'done'    ? 'green'
-                  : run.status === 'failed'  ? 'red'
-                  : run.status === 'running' ? 'orange'
-                  : 'grey'
+                  run.status === 'done'
+                    ? 'green'
+                    : run.status === 'failed'
+                      ? 'red'
+                      : run.status === 'running'
+                        ? 'orange'
+                        : 'grey'
                 }
               >
                 {run.status}
@@ -282,7 +283,13 @@ export default function RunDetail({ threadId: propThreadId, onBack }: Props) {
               <DescriptionListTerm>Priority</DescriptionListTerm>
               <DescriptionListDescription>
                 <Label
-                  color={run.priority === 'critical' ? 'red' : run.priority === 'major' ? 'orange' : 'grey'}
+                  color={
+                    run.priority === 'critical'
+                      ? 'red'
+                      : run.priority === 'major'
+                        ? 'orange'
+                        : 'grey'
+                  }
                   isCompact
                 >
                   {run.priority}

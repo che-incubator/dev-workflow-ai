@@ -47,7 +47,13 @@ export default function UserMenu() {
           <img
             src={avatarSrc}
             alt={displayName}
-            style={{ width: 28, height: 28, borderRadius: '50%', verticalAlign: 'middle', marginRight: 6 }}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              verticalAlign: 'middle',
+              marginRight: 6,
+            }}
           />
           {displayName}
         </MenuToggle>

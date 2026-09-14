@@ -202,8 +202,9 @@ async function runAgentLoop(
 
 export async function implementNode(state: State): Promise<Partial<State>> {
   const context = await loadContext(state.project, [
-    'context', 'rules-dev',
-    'skills-fix-issue',  // project-specific implementation skill (if present)
+    'context',
+    'rules-dev',
+    'skills-fix-issue', // project-specific implementation skill (if present)
   ]);
   const config = await loadProjectConfig(state.project);
 

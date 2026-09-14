@@ -148,10 +148,15 @@ function schemaToJsonSchema(schema: unknown): Record<string, unknown> {
   // Zod schema — convert using LangChain's bundled converter
   if (schema && typeof schema === 'object' && '_def' in schema) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { zodToJsonSchema } = require('@langchain/core/dist/utils/zod-to-json-schema/index.cjs');
+      /* eslint-disable @typescript-eslint/no-require-imports */
+      const {
+        zodToJsonSchema,
+      } = require('@langchain/core/dist/utils/zod-to-json-schema/index.cjs');
+      /* eslint-enable @typescript-eslint/no-require-imports */
       const js = zodToJsonSchema(schema);
-      return typeof js === 'object' && js !== null ? js as Record<string, unknown> : { type: 'object', properties: {} };
+      return typeof js === 'object' && js !== null
+        ? (js as Record<string, unknown>)
+        : { type: 'object', properties: {} };
     } catch {
       return { type: 'object', properties: {} };
     }
@@ -270,9 +275,10 @@ export class VertexAnthropicLLM extends BaseChatModel {
     const token = await this.auth.getAccessToken();
     if (!token) throw new Error('[vertex-anthropic] Failed to get GCP access token');
 
-    const host = this.region === 'global'
-      ? 'aiplatform.googleapis.com'
-      : `${this.region}-aiplatform.googleapis.com`;
+    const host =
+      this.region === 'global'
+        ? 'aiplatform.googleapis.com'
+        : `${this.region}-aiplatform.googleapis.com`;
     const endpoint =
       `https://${host}/v1/projects/${this.projectId}` +
       `/locations/${this.region}/publishers/anthropic/models/${this.model}:rawPredict`;
@@ -326,7 +332,9 @@ function loadCredentials(): Record<string, unknown> | undefined {
     try {
       return JSON.parse(readFileSync(filePath, 'utf-8')) as Record<string, unknown>;
     } catch {
-      console.warn(`[vertex-anthropic] Could not read GOOGLE_APPLICATION_CREDENTIALS file: ${filePath}`);
+      console.warn(
+        `[vertex-anthropic] Could not read GOOGLE_APPLICATION_CREDENTIALS file: ${filePath}`,
+      );
     }
   }
   return undefined;

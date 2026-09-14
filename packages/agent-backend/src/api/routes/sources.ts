@@ -92,8 +92,8 @@ const BOOST: Record<string, number> = {
   'good first issue': 1,
   'help wanted': 1,
   // CVE / Security: always highest priority
-  'Security': 30,
-  'security': 30,
+  Security: 30,
+  security: 30,
 };
 
 const SKIP_LABELS = new Set([
@@ -342,7 +342,10 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
   });
 
   // POST /api/sources — add source by URL
-  app.post<{ Body: { url: string; project_slug?: string; label?: string } }>('/', { schema: { tags } }, async (req, reply) => {
+  app.post<{ Body: { url: string; project_slug?: string; label?: string } }>(
+    '/',
+    { schema: { tags } },
+    async (req, reply) => {
       const { url, project_slug, label } = req.body;
       if (!url) return reply.status(400).send({ error: 'url is required' });
 
@@ -398,7 +401,10 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
   });
 
   // GET /api/sources/:id/issues — issues from one source
-  app.get<{ Params: { id: string }; Querystring: { status?: string } }>('/:id/issues', { schema: { tags } }, async (req, reply) => {
+  app.get<{ Params: { id: string }; Querystring: { status?: string } }>(
+    '/:id/issues',
+    { schema: { tags } },
+    async (req, reply) => {
       const status = req.query.status ?? 'open';
       const { rows } = await db.query<IssueRow>(
         `SELECT i.*, s.label as source_label, s.kind as source_kind
@@ -413,267 +419,346 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
 
   // POST /api/sources/issues/import — fetch a single GitHub or Jira issue by URL,
   //   auto-create its source if needed, store in DB, return the stored issue row.
-  app.post<{ Body: { url: string } }>('/issues/import', {
-    schema: {
-      tags,
-      body: {
-        type: 'object',
-        required: ['url'],
-        properties: { url: { type: 'string' } },
-        examples: [{ url: 'https://github.com/eclipse-che/che-dashboard/issues/1234' }],
+  app.post<{ Body: { url: string } }>(
+    '/issues/import',
+    {
+      schema: {
+        tags,
+        body: {
+          type: 'object',
+          required: ['url'],
+          properties: { url: { type: 'string' } },
+          examples: [{ url: 'https://github.com/eclipse-che/che-dashboard/issues/1234' }],
+        },
       },
     },
-  }, async (req, reply) => {
-    const { url } = req.body;
-    if (!url?.trim()) return reply.status(400).send({ error: 'url is required' });
+    async (req, reply) => {
+      const { url } = req.body;
+      if (!url?.trim()) return reply.status(400).send({ error: 'url is required' });
 
-    // ── GitHub ──────────────────────────────────────────────────────────────
-    const ghMatch = url.match(/github\.com\/([^/]+\/[^/]+)\/(?:issues|pull)\/(\d+)/);
-    if (ghMatch) {
-      const [, repoSlug, num] = ghMatch;
-      const ghToken = process.env.GITHUB_TOKEN;
-      const headers: Record<string, string> = { Accept: 'application/vnd.github+json', 'User-Agent': 'dev-workflow-ai' };
-      if (ghToken) headers['Authorization'] = `Bearer ${ghToken}`;
-      const res = await fetch(`https://api.github.com/repos/${repoSlug}/issues/${num}`, { headers });
-      if (!res.ok) return reply.status(res.status).send({ error: `GitHub API: ${res.status}` });
-      const gh = await res.json() as {
-        number: number; title: string; body: string;
-        labels: { name: string }[]; state: string;
-        assignees: { login: string }[];
-      };
+      // ── GitHub ──────────────────────────────────────────────────────────────
+      const ghMatch = url.match(/github\.com\/([^/]+\/[^/]+)\/(?:issues|pull)\/(\d+)/);
+      if (ghMatch) {
+        const [, repoSlug, num] = ghMatch;
+        const ghToken = process.env.GITHUB_TOKEN;
+        const headers: Record<string, string> = {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'dev-workflow-ai',
+        };
+        if (ghToken) headers['Authorization'] = `Bearer ${ghToken}`;
+        const res = await fetch(`https://api.github.com/repos/${repoSlug}/issues/${num}`, {
+          headers,
+        });
+        if (!res.ok) return reply.status(res.status).send({ error: `GitHub API: ${res.status}` });
+        const gh = (await res.json()) as {
+          number: number;
+          title: string;
+          body: string;
+          labels: { name: string }[];
+          state: string;
+          assignees: { login: string }[];
+        };
 
-      const sourceUrl = `https://github.com/${repoSlug}/issues`;
-      const { rows: [src] } = await db.query<IssueSourceRow>(
-        `INSERT INTO issue_sources (url, kind, label) VALUES ($1, 'github', $2)
+        const sourceUrl = `https://github.com/${repoSlug}/issues`;
+        const {
+          rows: [src],
+        } = await db.query<IssueSourceRow>(
+          `INSERT INTO issue_sources (url, kind, label) VALUES ($1, 'github', $2)
          ON CONFLICT (url) DO UPDATE SET label = EXCLUDED.label RETURNING *`,
-        [sourceUrl, repoSlug],
-      );
-      const { rows: [issue] } = await db.query(
-        `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, raw, fetched_at)
+          [sourceUrl, repoSlug],
+        );
+        const {
+          rows: [issue],
+        } = await db.query(
+          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, raw, fetched_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
          ON CONFLICT (source_id, external_id) DO UPDATE SET
            title = EXCLUDED.title, body = EXCLUDED.body, labels = EXCLUDED.labels,
            status = EXCLUDED.status, raw = EXCLUDED.raw, fetched_at = now()
          RETURNING *, $9::text as source_label`,
-        [src.id, String(gh.number), gh.title, url, gh.body ?? '',
-         gh.labels.map(l => l.name), gh.state === 'open' ? 'open' : 'closed',
-         JSON.stringify(gh), repoSlug],
-      );
-      return reply.send(issue);
-    }
-
-    // ── Jira ────────────────────────────────────────────────────────────────
-    const jiraMatch = url.match(/\/browse\/([A-Z]+-\d+)/);
-    if (jiraMatch) {
-      const key = jiraMatch[1];
-      const project = key.replace(/-\d+$/, '');
-      const jiraToken = process.env.JIRA_TOKEN || process.env.JIRA_API_TOKEN;
-      const jiraEmail = process.env.JIRA_EMAIL;
-      const jiraBase = process.env.JIRA_BASE_URL ?? 'https://issues.redhat.com';
-
-      if (!jiraToken || !jiraEmail) {
-        return reply.status(400).send({ error: 'JIRA_TOKEN and JIRA_EMAIL required' });
+          [
+            src.id,
+            String(gh.number),
+            gh.title,
+            url,
+            gh.body ?? '',
+            gh.labels.map(l => l.name),
+            gh.state === 'open' ? 'open' : 'closed',
+            JSON.stringify(gh),
+            repoSlug,
+          ],
+        );
+        return reply.send(issue);
       }
-      const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
-      const res = await fetch(
-        `${jiraBase}/rest/api/3/issue/${key}?fields=summary,description,labels,status,priority,assignee`,
-        { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } },
-      );
-      if (!res.ok) return reply.status(res.status).send({ error: `Jira API: ${res.status}` });
-      const jira = await res.json() as {
-        key: string;
-        fields: {
-          summary: string;
-          description?: unknown;
-          labels?: string[];
-          status?: { name: string };
-          priority?: { name: string };
-          assignee?: { emailAddress: string };
+
+      // ── Jira ────────────────────────────────────────────────────────────────
+      const jiraMatch = url.match(/\/browse\/([A-Z]+-\d+)/);
+      if (jiraMatch) {
+        const key = jiraMatch[1];
+        const project = key.replace(/-\d+$/, '');
+        const jiraToken = process.env.JIRA_TOKEN || process.env.JIRA_API_TOKEN;
+        const jiraEmail = process.env.JIRA_EMAIL;
+        const jiraBase = process.env.JIRA_BASE_URL ?? 'https://issues.redhat.com';
+
+        if (!jiraToken || !jiraEmail) {
+          return reply.status(400).send({ error: 'JIRA_TOKEN and JIRA_EMAIL required' });
+        }
+        const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+        const res = await fetch(
+          `${jiraBase}/rest/api/3/issue/${key}?fields=summary,description,labels,status,priority,assignee`,
+          { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } },
+        );
+        if (!res.ok) return reply.status(res.status).send({ error: `Jira API: ${res.status}` });
+        const jira = (await res.json()) as {
+          key: string;
+          fields: {
+            summary: string;
+            description?: unknown;
+            labels?: string[];
+            status?: { name: string };
+            priority?: { name: string };
+            assignee?: { emailAddress: string };
+          };
         };
-      };
 
-      const sourceUrl = `${jiraBase}/projects/${project}`;
-      const { rows: [src] } = await db.query<IssueSourceRow>(
-        `INSERT INTO issue_sources (url, kind, label) VALUES ($1, 'jira', $2)
+        const sourceUrl = `${jiraBase}/projects/${project}`;
+        const {
+          rows: [src],
+        } = await db.query<IssueSourceRow>(
+          `INSERT INTO issue_sources (url, kind, label) VALUES ($1, 'jira', $2)
          ON CONFLICT (url) DO UPDATE SET label = EXCLUDED.label RETURNING *`,
-        [sourceUrl, project],
-      );
-      // Extract plain text from Atlassian Document Format
-      function adfToText(node: unknown): string {
-        if (!node || typeof node !== 'object') return '';
-        const n = node as Record<string, unknown>;
-        if (n.type === 'text' && typeof n.text === 'string') return n.text;
-        const children = (n.content ?? []) as unknown[];
-        return children.map(adfToText).join(n.type === 'paragraph' ? '\n' : '');
-      }
-      const body = jira.fields.description ? adfToText(jira.fields.description).trim() : '';
+          [sourceUrl, project],
+        );
+        // Extract plain text from Atlassian Document Format
+        function adfToText(node: unknown): string {
+          if (!node || typeof node !== 'object') return '';
+          const n = node as Record<string, unknown>;
+          if (n.type === 'text' && typeof n.text === 'string') return n.text;
+          const children = (n.content ?? []) as unknown[];
+          return children.map(adfToText).join(n.type === 'paragraph' ? '\n' : '');
+        }
+        const body = jira.fields.description ? adfToText(jira.fields.description).trim() : '';
 
-      const title = jira.fields.summary;
-      const status = (jira.fields.status?.name ?? 'open').toLowerCase() === 'done' ? 'closed' : 'open';
-      const priority = (jira.fields.priority?.name ?? '').toLowerCase();
-      const { rows: [issue] } = await db.query(
-        `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, raw, fetched_at)
+        const title = jira.fields.summary;
+        const status =
+          (jira.fields.status?.name ?? 'open').toLowerCase() === 'done' ? 'closed' : 'open';
+        const priority = (jira.fields.priority?.name ?? '').toLowerCase();
+        const {
+          rows: [issue],
+        } = await db.query(
+          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, raw, fetched_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
          ON CONFLICT (source_id, external_id) DO UPDATE SET
            title = EXCLUDED.title, body = EXCLUDED.body, labels = EXCLUDED.labels,
            status = EXCLUDED.status, priority = EXCLUDED.priority,
            raw = EXCLUDED.raw, fetched_at = now()
          RETURNING *, $10::text as source_label`,
-        [src.id, key, title, url, body, jira.fields.labels ?? [],
-         status, priority, JSON.stringify(jira.fields), project],
-      );
-      return reply.send(issue);
-    }
+          [
+            src.id,
+            key,
+            title,
+            url,
+            body,
+            jira.fields.labels ?? [],
+            status,
+            priority,
+            JSON.stringify(jira.fields),
+            project,
+          ],
+        );
+        return reply.send(issue);
+      }
 
-    return reply.status(400).send({ error: 'URL must be a GitHub issue or Jira browse URL' });
-  });
+      return reply.status(400).send({ error: 'URL must be a GitHub issue or Jira browse URL' });
+    },
+  );
 
   // POST /api/sources/jira/sync-assigned — fetch all Jira issues assigned to the current user
   // Triggered when a source URL ends with /jira/for-you?tab=assigned
-  app.post('/jira/sync-assigned', {
-    schema: {
-      tags,
-      body: {
-        type: ['object', 'null'],
-        properties: {
-          sourceId: { type: 'number', description: 'IssueSource id to associate with (auto-created if omitted)' },
+  app.post(
+    '/jira/sync-assigned',
+    {
+      schema: {
+        tags,
+        body: {
+          type: ['object', 'null'],
+          properties: {
+            sourceId: {
+              type: 'number',
+              description: 'IssueSource id to associate with (auto-created if omitted)',
+            },
+          },
         },
       },
     },
-  }, async (req, reply) => {
-    const jiraToken = process.env.JIRA_TOKEN ?? process.env.JIRA_API_TOKEN;
-    const jiraEmail = process.env.JIRA_EMAIL;
-    const jiraBase  = process.env.JIRA_BASE_URL ?? 'https://redhat.atlassian.net';
+    async (req, reply) => {
+      const jiraToken = process.env.JIRA_TOKEN ?? process.env.JIRA_API_TOKEN;
+      const jiraEmail = process.env.JIRA_EMAIL;
+      const jiraBase = process.env.JIRA_BASE_URL ?? 'https://redhat.atlassian.net';
 
-    if (!jiraToken || !jiraEmail) {
-      return reply.status(400).send({ error: 'JIRA_TOKEN and JIRA_EMAIL env vars required' });
-    }
-
-    const sourceUrl = `${jiraBase}/jira/for-you?tab=assigned`;
-    const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
-
-    // Ensure the source row exists
-    const body = req.body as { sourceId?: number } | null;
-    let sourceId: number = body?.sourceId ?? 0;
-
-    if (!sourceId) {
-      const { rows: [src] } = await db.query<IssueSourceRow>(
-        `INSERT INTO issue_sources (url, kind, label, project_slug)
-         VALUES ($1, 'jira', 'Assigned to me', '')
-         ON CONFLICT (url) DO UPDATE SET label = EXCLUDED.label RETURNING *`,
-        [sourceUrl],
-      );
-      sourceId = src.id;
-    }
-
-    // Fetch assigned-to-me open issues (To Do / New only — skip In Progress and Done)
-    // Uses Jira REST API v3 /search/jql (POST) with cursor-based pagination (nextPageToken).
-    // Note: startAt is NOT valid for this endpoint; use nextPageToken instead.
-    const jql = 'assignee = currentUser() AND resolution = Unresolved AND statusCategory = "To Do" ORDER BY updated DESC';
-    const maxResults = 100;
-    let upserted = 0;
-    let nextPageToken: string | undefined;
-
-    while (true) {
-      const bodyPayload: Record<string, unknown> = {
-        jql,
-        maxResults,
-        fields: ['summary', 'description', 'status', 'priority', 'labels', 'issuetype', 'updated', 'customfield_10028'],
-      };
-      if (nextPageToken) bodyPayload.nextPageToken = nextPageToken;
-
-      const res = await fetch(`${jiraBase}/rest/api/3/search/jql`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${auth}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(bodyPayload),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        return reply.status(res.status).send({ error: `Jira API error: ${res.status}`, detail: text.slice(0, 300) });
+      if (!jiraToken || !jiraEmail) {
+        return reply.status(400).send({ error: 'JIRA_TOKEN and JIRA_EMAIL env vars required' });
       }
 
-      const data = await res.json() as {
-        issues: Array<{
-          key: string;
-          fields: Record<string, unknown> & {
-            summary: string;
-            status?: { name: string };
-            priority?: { name: string };
-            labels?: string[];
-            description?: unknown;
-          };
-        }>;
-        nextPageToken?: string;
-      };
+      const sourceUrl = `${jiraBase}/jira/for-you?tab=assigned`;
+      const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
 
-      for (const issue of data.issues) {
-        const { key, fields } = issue;
-        const issueUrl = `${jiraBase}/browse/${key}`;
-        const title = fields.summary;
-        const body = fields.description ? adfToText(fields.description).slice(0, 4000) : '';
-        const rawPriority = (fields.priority?.name ?? '').toLowerCase();
-        const priority = rawPriority.includes('critical') ? 'critical'
-          : rawPriority.includes('major') || rawPriority.includes('high') ? 'major'
-          : rawPriority.includes('minor') || rawPriority.includes('medium') ? 'minor'
-          : rawPriority.includes('trivial') || rawPriority.includes('low') ? 'trivial'
-          : '';
+      // Ensure the source row exists
+      const body = req.body as { sourceId?: number } | null;
+      let sourceId: number = body?.sourceId ?? 0;
 
-        const { score: issScore } = scoreIssue(fields.labels ?? [], title);
-        const sp = jiraStoryPoints(fields) || estimateStoryPoints(body, title);
+      if (!sourceId) {
+        const {
+          rows: [src],
+        } = await db.query<IssueSourceRow>(
+          `INSERT INTO issue_sources (url, kind, label, project_slug)
+         VALUES ($1, 'jira', 'Assigned to me', '')
+         ON CONFLICT (url) DO UPDATE SET label = EXCLUDED.label RETURNING *`,
+          [sourceUrl],
+        );
+        sourceId = src.id;
+      }
 
-        await db.query(
-          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, story_points, raw, fetched_at)
+      // Fetch assigned-to-me open issues (To Do / New only — skip In Progress and Done)
+      // Uses Jira REST API v3 /search/jql (POST) with cursor-based pagination (nextPageToken).
+      // Note: startAt is NOT valid for this endpoint; use nextPageToken instead.
+      const jql =
+        'assignee = currentUser() AND resolution = Unresolved AND statusCategory = "To Do" ORDER BY updated DESC';
+      const maxResults = 100;
+      let upserted = 0;
+      let nextPageToken: string | undefined;
+
+      while (true) {
+        const bodyPayload: Record<string, unknown> = {
+          jql,
+          maxResults,
+          fields: [
+            'summary',
+            'description',
+            'status',
+            'priority',
+            'labels',
+            'issuetype',
+            'updated',
+            'customfield_10028',
+          ],
+        };
+        if (nextPageToken) bodyPayload.nextPageToken = nextPageToken;
+
+        const res = await fetch(`${jiraBase}/rest/api/3/search/jql`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${auth}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(bodyPayload),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          return reply
+            .status(res.status)
+            .send({ error: `Jira API error: ${res.status}`, detail: text.slice(0, 300) });
+        }
+
+        const data = (await res.json()) as {
+          issues: Array<{
+            key: string;
+            fields: Record<string, unknown> & {
+              summary: string;
+              status?: { name: string };
+              priority?: { name: string };
+              labels?: string[];
+              description?: unknown;
+            };
+          }>;
+          nextPageToken?: string;
+        };
+
+        for (const issue of data.issues) {
+          const { key, fields } = issue;
+          const issueUrl = `${jiraBase}/browse/${key}`;
+          const title = fields.summary;
+          const body = fields.description ? adfToText(fields.description).slice(0, 4000) : '';
+          const rawPriority = (fields.priority?.name ?? '').toLowerCase();
+          const priority = rawPriority.includes('critical')
+            ? 'critical'
+            : rawPriority.includes('major') || rawPriority.includes('high')
+              ? 'major'
+              : rawPriority.includes('minor') || rawPriority.includes('medium')
+                ? 'minor'
+                : rawPriority.includes('trivial') || rawPriority.includes('low')
+                  ? 'trivial'
+                  : '';
+
+          const { score: issScore } = scoreIssue(fields.labels ?? [], title);
+          const sp = jiraStoryPoints(fields) || estimateStoryPoints(body, title);
+
+          await db.query(
+            `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, story_points, raw, fetched_at)
            VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, $8, $9, $10, now())
            ON CONFLICT (source_id, external_id) DO UPDATE SET
              title = EXCLUDED.title, body = EXCLUDED.body, labels = EXCLUDED.labels,
              status = 'open', priority = EXCLUDED.priority,
              score = EXCLUDED.score, story_points = EXCLUDED.story_points,
              raw = EXCLUDED.raw, fetched_at = now()`,
-          [sourceId, key, title, issueUrl, body, fields.labels ?? [],
-           priority, issScore, sp, JSON.stringify(fields)],
-        );
-        upserted++;
+            [
+              sourceId,
+              key,
+              title,
+              issueUrl,
+              body,
+              fields.labels ?? [],
+              priority,
+              issScore,
+              sp,
+              JSON.stringify(fields),
+            ],
+          );
+          upserted++;
+        }
+
+        if (!data.nextPageToken || data.issues.length < maxResults) break;
+        nextPageToken = data.nextPageToken;
       }
 
-      if (!data.nextPageToken || data.issues.length < maxResults) break;
-      nextPageToken = data.nextPageToken;
-    }
+      await db.query('UPDATE issue_sources SET last_synced_at = now() WHERE id = $1', [sourceId]);
 
-    await db.query(
-      'UPDATE issue_sources SET last_synced_at = now() WHERE id = $1',
-      [sourceId],
-    );
-
-    console.log(`[jira-assigned] Synced ${upserted} issues into source ${sourceId}`);
-    return reply.send({ sourceId, upserted });
-  });
+      console.log(`[jira-assigned] Synced ${upserted} issues into source ${sourceId}`);
+      return reply.send({ sourceId, upserted });
+    },
+  );
 
   // DELETE /api/sources/issues/:issueId — remove a single stored issue
-  app.delete<{ Params: { issueId: string } }>('/issues/:issueId', { schema: { tags } }, async (req, reply) => {
-    await db.query('DELETE FROM issues WHERE id = $1', [parseInt(req.params.issueId, 10)]);
-    return reply.status(204).send();
-  });
+  app.delete<{ Params: { issueId: string } }>(
+    '/issues/:issueId',
+    { schema: { tags } },
+    async (req, reply) => {
+      await db.query('DELETE FROM issues WHERE id = $1', [parseInt(req.params.issueId, 10)]);
+      return reply.status(204).send();
+    },
+  );
 
   // GET /api/sources/issues — all open issues across active sources
-  app.get<{ Querystring: { status?: string; limit?: string } }>('/issues', { schema: { tags } }, async (req, reply) => {
-    const status = req.query.status ?? 'open';
-    const limit = Math.min(parseInt(req.query.limit ?? '200', 10), 500);
-    const { rows } = await db.query(
-      `SELECT i.*, s.label as source_label, s.kind as source_kind, s.url as source_url
+  app.get<{ Querystring: { status?: string; limit?: string } }>(
+    '/issues',
+    { schema: { tags } },
+    async (req, reply) => {
+      const status = req.query.status ?? 'open';
+      const limit = Math.min(parseInt(req.query.limit ?? '200', 10), 500);
+      const { rows } = await db.query(
+        `SELECT i.*, s.label as source_label, s.kind as source_kind, s.url as source_url
        FROM issues i
        JOIN issue_sources s ON s.id = i.source_id
        WHERE i.status = $1 AND s.active = true
        ORDER BY i.score DESC, i.priority ASC, i.id DESC
        LIMIT $2`,
-      [status, limit],
-    );
-    return reply.send(rows);
-  });
+        [status, limit],
+      );
+      return reply.send(rows);
+    },
+  );
 };
 
 // ── Background sync ────────────────────────────────────────────────────────
@@ -683,7 +768,7 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
 async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
   const jiraToken = process.env.JIRA_TOKEN ?? process.env.JIRA_API_TOKEN;
   const jiraEmail = process.env.JIRA_EMAIL;
-  const jiraBase  = process.env.JIRA_BASE_URL ?? 'https://redhat.atlassian.net';
+  const jiraBase = process.env.JIRA_BASE_URL ?? 'https://redhat.atlassian.net';
 
   if (!jiraToken || !jiraEmail) {
     console.error('[jira-assigned] JIRA_TOKEN and JIRA_EMAIL env vars required');
@@ -693,7 +778,8 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
   const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
   // Only "To Do" / "New" issues — skip In Progress and Done.
   // Uses cursor-based pagination (nextPageToken), not startAt.
-  const jql = 'assignee = currentUser() AND resolution = Unresolved AND statusCategory = "To Do" ORDER BY updated DESC';
+  const jql =
+    'assignee = currentUser() AND resolution = Unresolved AND statusCategory = "To Do" ORDER BY updated DESC';
   const maxResults = 100;
   let upserted = 0;
   let nextPageToken: string | undefined;
@@ -702,7 +788,16 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
     const bodyPayload: Record<string, unknown> = {
       jql,
       maxResults,
-      fields: ['summary', 'description', 'status', 'priority', 'labels', 'issuetype', 'updated', 'customfield_10028'],
+      fields: [
+        'summary',
+        'description',
+        'status',
+        'priority',
+        'labels',
+        'issuetype',
+        'updated',
+        'customfield_10028',
+      ],
     };
     if (nextPageToken) bodyPayload.nextPageToken = nextPageToken;
 
@@ -721,7 +816,7 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
       return;
     }
 
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       issues: Array<{
         key: string;
         fields: Record<string, unknown> & {
@@ -740,11 +835,15 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
       const issueUrl = `${jiraBase}/browse/${key}`;
       const body = fields.description ? adfToText(fields.description).slice(0, 4000) : '';
       const rawPriority = (fields.priority?.name ?? '').toLowerCase();
-      const priority = rawPriority.includes('critical') ? 'critical'
-        : rawPriority.includes('major') || rawPriority.includes('high') ? 'major'
-        : rawPriority.includes('minor') || rawPriority.includes('medium') ? 'minor'
-        : rawPriority.includes('trivial') || rawPriority.includes('low') ? 'trivial'
-        : '';
+      const priority = rawPriority.includes('critical')
+        ? 'critical'
+        : rawPriority.includes('major') || rawPriority.includes('high')
+          ? 'major'
+          : rawPriority.includes('minor') || rawPriority.includes('medium')
+            ? 'minor'
+            : rawPriority.includes('trivial') || rawPriority.includes('low')
+              ? 'trivial'
+              : '';
 
       const { score: issueScore } = scoreIssue(fields.labels ?? [], fields.summary);
       const sp = jiraStoryPoints(fields) || estimateStoryPoints(body, fields.summary);
@@ -757,8 +856,18 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
            status = 'open', priority = EXCLUDED.priority,
            score = EXCLUDED.score, story_points = EXCLUDED.story_points,
            raw = EXCLUDED.raw, fetched_at = now()`,
-        [source.id, key, fields.summary, issueUrl, body, fields.labels ?? [],
-         priority, issueScore, sp, JSON.stringify(fields)],
+        [
+          source.id,
+          key,
+          fields.summary,
+          issueUrl,
+          body,
+          fields.labels ?? [],
+          priority,
+          issueScore,
+          sp,
+          JSON.stringify(fields),
+        ],
       );
       upserted++;
     }

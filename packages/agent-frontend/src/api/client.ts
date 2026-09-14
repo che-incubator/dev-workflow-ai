@@ -111,18 +111,19 @@ export const syncJiraAssigned = (sourceId?: number) =>
     body: sourceId != null ? JSON.stringify({ sourceId }) : '{}',
   });
 
-export const isJiraAssignedUrl = (url: string) =>
-  url.includes('/jira/for-you');
+export const isJiraAssignedUrl = (url: string) => url.includes('/jira/for-you');
 export const getAllIssues = () => apiFetch<StoredIssue[]>('/sources/issues');
 export const deleteIssue = (id: number) =>
   apiFetch<void>(`/sources/issues/${id}`, { method: 'DELETE' });
 export const importIssue = (url: string) =>
   apiFetch<StoredIssue>('/sources/issues/import', {
-    method: 'POST', body: JSON.stringify({ url }),
+    method: 'POST',
+    body: JSON.stringify({ url }),
   });
 export const refreshIssue = (url: string) =>
   apiFetch<StoredIssue>('/sources/issues/import', {
-    method: 'POST', body: JSON.stringify({ url }),
+    method: 'POST',
+    body: JSON.stringify({ url }),
   });
 
 // ── Runs ─────────────────────────────────────────────────────────────────
@@ -185,10 +186,16 @@ export const cancelRun = (threadId: string) =>
   apiFetch<void>(`/runs/${threadId}`, { method: 'DELETE' });
 
 export const triggerAutorun = () =>
-  apiFetch<{ threadId: string; issueUrl: string; title: string; dryRun: boolean }>('/runs/autorun', { method: 'POST' });
+  apiFetch<{ threadId: string; issueUrl: string; title: string; dryRun: boolean }>(
+    '/runs/autorun',
+    { method: 'POST' },
+  );
 
 export const triggerCveBatch = () =>
-  apiFetch<{ threadId: string; count: number; issues: Array<{ url: string; title: string }> }>('/runs/cve-batch', { method: 'POST' });
+  apiFetch<{ threadId: string; count: number; issues: Array<{ url: string; title: string }> }>(
+    '/runs/cve-batch',
+    { method: 'POST' },
+  );
 
 // ── WebSocket ─────────────────────────────────────────────────────────────
 
@@ -249,7 +256,8 @@ export interface ProviderHealthResult {
 }
 export const testAllProviders = (autoActivate = false) =>
   apiFetch<{ results: ProviderHealthResult[]; activated: string | null }>('/providers/test-all', {
-    method: 'POST', body: JSON.stringify({ autoActivate }),
+    method: 'POST',
+    body: JSON.stringify({ autoActivate }),
   });
 
 export const testProvider = (prompt: string, providerId?: string) =>
@@ -279,7 +287,7 @@ export interface AppSettings {
   executionMode: string; // 'pr' | 'export'
   outputDir: string;
   autorunEnabled: string; // 'true' | 'false'
-  autorunTimes: string;   // comma-separated HH:MM list e.g. "09:00,14:00"
+  autorunTimes: string; // comma-separated HH:MM list e.g. "09:00,14:00"
   [key: string]: string;
 }
 

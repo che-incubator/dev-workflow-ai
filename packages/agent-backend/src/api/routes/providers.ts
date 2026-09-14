@@ -58,7 +58,8 @@ export async function seedDefaultProviders(): Promise<void> {
       'SELECT provider_id, api_key FROM llm_providers WHERE is_active = true LIMIT 1',
     );
     const active = activeRows[0];
-    const needsSwitch = active &&
+    const needsSwitch =
+      active &&
       active.provider_id !== 'vertex' &&
       active.provider_id !== 'ollama' &&
       !active.api_key;
@@ -85,8 +86,10 @@ export async function seedDefaultProviders(): Promise<void> {
     };
     await syncKey('anthropic', process.env.ANTHROPIC_API_KEY ?? '');
     await syncKey('openai', process.env.OPENAI_API_KEY ?? '');
-    await syncKey('gemini',
-      (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) ?? '');
+    await syncKey(
+      'gemini',
+      (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) ?? '',
+    );
     return;
   }
 
@@ -95,43 +98,78 @@ export async function seedDefaultProviders(): Promise<void> {
   const vertexModel = process.env.VERTEX_CLAUDE_MODEL ?? 'claude-sonnet-4-6@default';
 
   const anthropicKey = process.env.ANTHROPIC_API_KEY ?? '';
-  const geminiKey    = (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) ?? '';
-  const openaiKey    = process.env.OPENAI_API_KEY ?? '';
+  const geminiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) ?? '';
+  const openaiKey = process.env.OPENAI_API_KEY ?? '';
 
   // Prefer Vertex AI when configured, Anthropic API when key is set, else Ollama
   const defaultActive = vertexProjectId ? 'vertex' : anthropicKey ? 'anthropic' : 'ollama';
 
   interface ProviderSeed {
-    provider_id: string; label: string; api_key: string;
-    base_url: string; model: string; is_active: boolean;
+    provider_id: string;
+    label: string;
+    api_key: string;
+    base_url: string;
+    model: string;
+    is_active: boolean;
   }
 
   const defaults: ProviderSeed[] = [
     ...(vertexProjectId
-      ? [{
-          provider_id: 'vertex', label: 'Vertex AI (Claude)',
-          api_key: vertexProjectId, base_url: vertexRegion, model: vertexModel,
-          is_active: defaultActive === 'vertex',
-        }]
+      ? [
+          {
+            provider_id: 'vertex',
+            label: 'Vertex AI (Claude)',
+            api_key: vertexProjectId,
+            base_url: vertexRegion,
+            model: vertexModel,
+            is_active: defaultActive === 'vertex',
+          },
+        ]
       : []),
     {
-      provider_id: 'ollama', label: 'Ollama (local)', api_key: '',
+      provider_id: 'ollama',
+      label: 'Ollama (local)',
+      api_key: '',
       base_url: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
       model: process.env.OLLAMA_MODEL ?? 'qwen2.5-coder:7b',
       is_active: defaultActive === 'ollama',
     },
     // Only seed Anthropic/OpenAI/Gemini when their keys are configured
     ...(anthropicKey
-      ? [{ provider_id: 'anthropic', label: 'Anthropic (Claude)', api_key: anthropicKey,
-           base_url: '', model: 'claude-sonnet-4-6', is_active: defaultActive === 'anthropic' }]
+      ? [
+          {
+            provider_id: 'anthropic',
+            label: 'Anthropic (Claude)',
+            api_key: anthropicKey,
+            base_url: '',
+            model: 'claude-sonnet-4-6',
+            is_active: defaultActive === 'anthropic',
+          },
+        ]
       : []),
     ...(openaiKey
-      ? [{ provider_id: 'openai', label: 'OpenAI', api_key: openaiKey,
-           base_url: '', model: 'gpt-4o', is_active: false }]
+      ? [
+          {
+            provider_id: 'openai',
+            label: 'OpenAI',
+            api_key: openaiKey,
+            base_url: '',
+            model: 'gpt-4o',
+            is_active: false,
+          },
+        ]
       : []),
     ...(geminiKey
-      ? [{ provider_id: 'gemini', label: 'Gemini', api_key: geminiKey,
-           base_url: '', model: process.env.GEMINI_MODEL ?? 'gemini-3.6-flash', is_active: false }]
+      ? [
+          {
+            provider_id: 'gemini',
+            label: 'Gemini',
+            api_key: geminiKey,
+            base_url: '',
+            model: process.env.GEMINI_MODEL ?? 'gemini-3.6-flash',
+            is_active: false,
+          },
+        ]
       : []),
   ];
 
@@ -150,9 +188,7 @@ const tags = ['Providers'];
 export const providersRoutes: FastifyPluginAsync = async app => {
   // GET / — list all providers (api_key masked)
   app.get('/', { schema: { tags } }, async (_req, reply) => {
-    const { rows } = await db.query<ProviderRow>(
-      'SELECT * FROM llm_providers ORDER BY id ASC',
-    );
+    const { rows } = await db.query<ProviderRow>('SELECT * FROM llm_providers ORDER BY id ASC');
     return reply.send(rows.map(mask));
   });
 
@@ -173,10 +209,10 @@ export const providersRoutes: FastifyPluginAsync = async app => {
 
     // Fall back to env var when no explicit key is provided
     const ENV_KEYS: Record<string, string> = {
-      gemini:    process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? '',
+      gemini: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? '',
       anthropic: process.env.ANTHROPIC_API_KEY ?? '',
-      openai:    process.env.OPENAI_API_KEY ?? '',
-      vertex:    process.env.ANTHROPIC_VERTEX_PROJECT_ID ?? '',
+      openai: process.env.OPENAI_API_KEY ?? '',
+      vertex: process.env.ANTHROPIC_VERTEX_PROJECT_ID ?? '',
     };
     const api_key = req.body.api_key || ENV_KEYS[provider_id] || '';
 
@@ -202,82 +238,99 @@ export const providersRoutes: FastifyPluginAsync = async app => {
   });
 
   // DELETE /:providerId
-  app.delete<{ Params: { providerId: string } }>('/:providerId', { schema: { tags } }, async (req, reply) => {
-    await db.query('DELETE FROM llm_providers WHERE provider_id = $1', [req.params.providerId]);
-    return reply.status(204).send();
-  });
+  app.delete<{ Params: { providerId: string } }>(
+    '/:providerId',
+    { schema: { tags } },
+    async (req, reply) => {
+      await db.query('DELETE FROM llm_providers WHERE provider_id = $1', [req.params.providerId]);
+      return reply.status(204).send();
+    },
+  );
 
   // POST /test — send a prompt to the specified or active provider
-  app.post<{ Body: { prompt: string; provider_id?: string } }>('/test', { schema: { tags, body: providerTestSchema } }, async (req, reply) => {
-    const { prompt, provider_id } = req.body;
-    if (!prompt?.trim()) {
-      return reply.status(400).send({ error: 'prompt is required' });
-    }
-    try {
-      let llm;
-      if (provider_id) {
-        const { rows } = await db.query<ProviderConfig>(
-          'SELECT provider_id, api_key, base_url, model FROM llm_providers WHERE provider_id = $1',
-          [provider_id],
-        );
-        if (!rows[0]) return reply.status(404).send({ error: `Provider '${provider_id}' not found` });
-        llm = buildLLMFromProvider(rows[0]);
-      } else {
-        llm = await buildLLMFromDB();
+  app.post<{ Body: { prompt: string; provider_id?: string } }>(
+    '/test',
+    { schema: { tags, body: providerTestSchema } },
+    async (req, reply) => {
+      const { prompt, provider_id } = req.body;
+      if (!prompt?.trim()) {
+        return reply.status(400).send({ error: 'prompt is required' });
       }
-      const result = await llm.invoke([new HumanMessage(prompt)]);
-      const content =
-        typeof result.content === 'string'
-          ? result.content
-          : JSON.stringify(result.content);
-      return reply.send({ response: content });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      // Provide a clear action hint for Vertex AI access errors
-      if (msg.includes('404') && msg.includes('does not have access')) {
-        return reply.status(500).send({
-          error: msg,
-          hint: 'Claude is not enabled for this GCP project. To enable it: GCP Console → Vertex AI → Model Garden → search "Claude" → Enable → accept Anthropic terms. Then wait ~2 min and retry.',
-        });
-      }
-      // If a specific provider was requested, surface its error directly — no fallback
-      if (provider_id) {
+      try {
+        let llm;
+        if (provider_id) {
+          const { rows } = await db.query<ProviderConfig>(
+            'SELECT provider_id, api_key, base_url, model FROM llm_providers WHERE provider_id = $1',
+            [provider_id],
+          );
+          if (!rows[0])
+            return reply.status(404).send({ error: `Provider '${provider_id}' not found` });
+          llm = buildLLMFromProvider(rows[0]);
+        } else {
+          llm = await buildLLMFromDB();
+        }
+        const result = await llm.invoke([new HumanMessage(prompt)]);
+        const content =
+          typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
+        return reply.send({ response: content });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        // Provide a clear action hint for Vertex AI access errors
+        if (msg.includes('404') && msg.includes('does not have access')) {
+          return reply.status(500).send({
+            error: msg,
+            hint: 'Claude is not enabled for this GCP project. To enable it: GCP Console → Vertex AI → Model Garden → search "Claude" → Enable → accept Anthropic terms. Then wait ~2 min and retry.',
+          });
+        }
+        // If a specific provider was requested, surface its error directly — no fallback
+        if (provider_id) {
+          return reply.status(500).send({ error: msg });
+        }
+        // Active provider is misconfigured (missing key) — try env-based LLM as fallback
+        if (msg.includes('API key not set') || msg.includes('not configured')) {
+          try {
+            const envLlm = buildEnvLLM();
+            const result2 = await envLlm.invoke([new HumanMessage(prompt)]);
+            const content2 =
+              typeof result2.content === 'string'
+                ? result2.content
+                : JSON.stringify(result2.content);
+            return reply.send({
+              response: content2,
+              note: 'Used env-based LLM (DB provider misconfigured)',
+            });
+          } catch (e2) {
+            const envMsg = e2 instanceof Error ? e2.message : String(e2);
+            // Check if env fallback also has no access to Claude on Vertex
+            if (envMsg.includes('404') && envMsg.includes('does not have access')) {
+              return reply.status(500).send({
+                error: 'No working LLM provider is configured.',
+                hint: 'Options: (1) Enable Claude in GCP Console → Vertex AI → Model Garden → search "Claude" → Enable. (2) Set an Anthropic API key in Settings → AI Providers → Anthropic. (3) Get a free Gemini key at aistudio.google.com/apikey and add it to Settings.',
+              });
+            }
+            return reply.status(500).send({ error: envMsg });
+          }
+        }
         return reply.status(500).send({ error: msg });
       }
-      // Active provider is misconfigured (missing key) — try env-based LLM as fallback
-      if (msg.includes('API key not set') || msg.includes('not configured')) {
-        try {
-          const envLlm = buildEnvLLM();
-          const result2 = await envLlm.invoke([new HumanMessage(prompt)]);
-          const content2 =
-            typeof result2.content === 'string' ? result2.content : JSON.stringify(result2.content);
-          return reply.send({ response: content2, note: 'Used env-based LLM (DB provider misconfigured)' });
-        } catch (e2) {
-          const envMsg = e2 instanceof Error ? e2.message : String(e2);
-          // Check if env fallback also has no access to Claude on Vertex
-          if (envMsg.includes('404') && envMsg.includes('does not have access')) {
-            return reply.status(500).send({
-              error: 'No working LLM provider is configured.',
-              hint: 'Options: (1) Enable Claude in GCP Console → Vertex AI → Model Garden → search "Claude" → Enable. (2) Set an Anthropic API key in Settings → AI Providers → Anthropic. (3) Get a free Gemini key at aistudio.google.com/apikey and add it to Settings.',
-            });
-          }
-          return reply.status(500).send({ error: envMsg });
-        }
-      }
-      return reply.status(500).send({ error: msg });
-    }
-  });
+    },
+  );
 
   // POST /test-all — parallel health check for all configured providers
   // Inspired by Claude Code agent-sdk-verifier (4-step checklist) +
   // code-review plugin (parallel independent probes per dimension).
-  app.post<{ Body: { autoActivate?: boolean } }>('/test-all', { schema: { tags } }, async (req, reply) => {
-    const { testAllProviders, autoActivateBestProvider } = await import('../../nodes/testProviders.js');
-    const results = await testAllProviders();
-    let activated: string | null = null;
-    if (req.body?.autoActivate) {
-      activated = await autoActivateBestProvider(results);
-    }
-    return reply.send({ results, activated });
-  });
+  app.post<{ Body: { autoActivate?: boolean } }>(
+    '/test-all',
+    { schema: { tags } },
+    async (req, reply) => {
+      const { testAllProviders, autoActivateBestProvider } =
+        await import('../../nodes/testProviders.js');
+      const results = await testAllProviders();
+      let activated: string | null = null;
+      if (req.body?.autoActivate) {
+        activated = await autoActivateBestProvider(results);
+      }
+      return reply.send({ results, activated });
+    },
+  );
 };

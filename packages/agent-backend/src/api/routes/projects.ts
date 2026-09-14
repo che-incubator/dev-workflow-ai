@@ -91,7 +91,10 @@ export const projectsRoutes: FastifyPluginAsync = async app => {
   });
 
   // GET /:name/context — merged context text
-  app.get<{ Params: { name: string }; Querystring: { filter?: string } }>('/:name/context', { schema: { tags } }, async (req, reply) => {
+  app.get<{ Params: { name: string }; Querystring: { filter?: string } }>(
+    '/:name/context',
+    { schema: { tags } },
+    async (req, reply) => {
       const { name } = req.params;
       const filter = req.query.filter ? req.query.filter.split(',') : undefined;
       const context = await loadContext(name, filter);
@@ -110,36 +113,52 @@ export const projectsRoutes: FastifyPluginAsync = async app => {
       auto_approve_min_priority?: string;
       story_point_budget?: number;
     };
-  }>('/', {
-    schema: {
-      tags,
-      body: {
-        type: 'object',
-        required: ['name', 'repo'],
-        properties: {
-          name: { type: 'string', description: 'Short identifier (e.g. che-dashboard)' },
-          repo: { type: 'string', description: 'GitHub owner/repo (e.g. eclipse-che/che-dashboard)' },
-          local_path: { type: 'string' },
-          stack: { type: 'array', items: { type: 'string' } },
-          description: { type: 'string' },
-          auto_approve_min_priority: { type: 'string', enum: ['critical', 'major', 'minor', 'trivial'] },
-          story_point_budget: { type: 'number' },
+  }>(
+    '/',
+    {
+      schema: {
+        tags,
+        body: {
+          type: 'object',
+          required: ['name', 'repo'],
+          properties: {
+            name: { type: 'string', description: 'Short identifier (e.g. che-dashboard)' },
+            repo: {
+              type: 'string',
+              description: 'GitHub owner/repo (e.g. eclipse-che/che-dashboard)',
+            },
+            local_path: { type: 'string' },
+            stack: { type: 'array', items: { type: 'string' } },
+            description: { type: 'string' },
+            auto_approve_min_priority: {
+              type: 'string',
+              enum: ['critical', 'major', 'minor', 'trivial'],
+            },
+            story_point_budget: { type: 'number' },
+          },
+          examples: [
+            {
+              name: 'che-dashboard',
+              repo: 'eclipse-che/che-dashboard',
+              auto_approve_min_priority: 'major',
+              story_point_budget: 3,
+            },
+          ],
         },
-        examples: [{ name: 'che-dashboard', repo: 'eclipse-che/che-dashboard', auto_approve_min_priority: 'major', story_point_budget: 3 }],
       },
     },
-  }, async (req, reply) => {
-    const {
-      name,
-      repo,
-      local_path,
-      stack,
-      description,
-      auto_approve_min_priority,
-      story_point_budget,
-    } = req.body;
-    const { rows } = await db.query<ProjectRow>(
-      `INSERT INTO projects (name, repo, local_path, stack, description, auto_approve_min_priority, story_point_budget)
+    async (req, reply) => {
+      const {
+        name,
+        repo,
+        local_path,
+        stack,
+        description,
+        auto_approve_min_priority,
+        story_point_budget,
+      } = req.body;
+      const { rows } = await db.query<ProjectRow>(
+        `INSERT INTO projects (name, repo, local_path, stack, description, auto_approve_min_priority, story_point_budget)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (name) DO UPDATE
          SET repo = EXCLUDED.repo,
@@ -150,18 +169,19 @@ export const projectsRoutes: FastifyPluginAsync = async app => {
              story_point_budget = EXCLUDED.story_point_budget,
              updated_at = now()
        RETURNING *`,
-      [
-        name,
-        repo,
-        local_path ?? '',
-        stack ?? [],
-        description ?? '',
-        auto_approve_min_priority ?? 'major',
-        story_point_budget ?? 3,
-      ],
-    );
-    return reply.status(201).send(rows[0]);
-  });
+        [
+          name,
+          repo,
+          local_path ?? '',
+          stack ?? [],
+          description ?? '',
+          auto_approve_min_priority ?? 'major',
+          story_point_budget ?? 3,
+        ],
+      );
+      return reply.status(201).send(rows[0]);
+    },
+  );
 
   // PUT /:name — update project
   app.put<{
@@ -209,37 +229,44 @@ export const projectsRoutes: FastifyPluginAsync = async app => {
   });
 
   // POST /:name/update — clone or pull the repo, update local_path in DB
-  app.post<{ Params: { name: string }; Body: { localPath?: string } }>('/:name/update', {
-    schema: {
-      tags,
-      body: {
-        type: ['object', 'null'],
-        properties: {
-          localPath: { type: 'string', description: 'Override clone directory (default: from settings)' },
+  app.post<{ Params: { name: string }; Body: { localPath?: string } }>(
+    '/:name/update',
+    {
+      schema: {
+        tags,
+        body: {
+          type: ['object', 'null'],
+          properties: {
+            localPath: {
+              type: 'string',
+              description: 'Override clone directory (default: from settings)',
+            },
+          },
         },
       },
     },
-  }, async (req, reply) => {
-    const { name } = req.params;
-    const { rows } = await db.query<ProjectRow>('SELECT * FROM projects WHERE name = $1', [name]);
-    if (!rows[0]) return reply.status(404).send({ error: 'Project not found' });
+    async (req, reply) => {
+      const { name } = req.params;
+      const { rows } = await db.query<ProjectRow>('SELECT * FROM projects WHERE name = $1', [name]);
+      if (!rows[0]) return reply.status(404).send({ error: 'Project not found' });
 
-    const project = rows[0];
-    if (!project.repo) return reply.status(400).send({ error: 'Project has no repo configured' });
+      const project = rows[0];
+      if (!project.repo) return reply.status(400).send({ error: 'Project has no repo configured' });
 
-    const cloneBase = await getCloneDir();
-    const targetPath = req.body?.localPath ?? join(cloneBase, project.repo);
+      const cloneBase = await getCloneDir();
+      const targetPath = req.body?.localPath ?? join(cloneBase, project.repo);
 
-    try {
-      const actualPath = await gitCloneOrPull(project.repo, targetPath);
-      const { rows: updated } = await db.query<ProjectRow>(
-        'UPDATE projects SET local_path = $2, updated_at = now() WHERE name = $1 RETURNING *',
-        [name, actualPath],
-      );
-      return reply.send({ project: updated[0], cloned: !project.local_path });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return reply.status(500).send({ error: `git operation failed: ${msg}` });
-    }
-  });
+      try {
+        const actualPath = await gitCloneOrPull(project.repo, targetPath);
+        const { rows: updated } = await db.query<ProjectRow>(
+          'UPDATE projects SET local_path = $2, updated_at = now() WHERE name = $1 RETURNING *',
+          [name, actualPath],
+        );
+        return reply.send({ project: updated[0], cloned: !project.local_path });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return reply.status(500).send({ error: `git operation failed: ${msg}` });
+      }
+    },
+  );
 };
