@@ -150,9 +150,11 @@ module.exports = (env, argv) => {
     devServer: isProd
       ? undefined
       : {
+          host: '0.0.0.0',
           port: 5173,
           hot: true,
           historyApiFallback: true,
+          allowedHosts: 'all',
           proxy: [
             { context: ['/api', '/health'], target: 'http://localhost:3000' },
             { context: ['/ws'], target: 'ws://localhost:3000', ws: true },
