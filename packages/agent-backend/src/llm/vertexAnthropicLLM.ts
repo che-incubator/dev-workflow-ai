@@ -145,25 +145,13 @@ interface LangChainTool {
 
 function schemaToJsonSchema(schema: unknown): Record<string, unknown> {
   if (!schema) return { type: 'object', properties: {} };
-  // Zod schema — convert using LangChain's bundled converter
-  if (schema && typeof schema === 'object' && '_def' in schema) {
-    try {
-      /* eslint-disable @typescript-eslint/no-require-imports */
-      const {
-        zodToJsonSchema,
-      } = require('@langchain/core/dist/utils/zod-to-json-schema/index.cjs');
-      /* eslint-enable @typescript-eslint/no-require-imports */
-      const js = zodToJsonSchema(schema);
-      return typeof js === 'object' && js !== null
-        ? (js as Record<string, unknown>)
-        : { type: 'object', properties: {} };
-    } catch {
-      return { type: 'object', properties: {} };
-    }
+  // Already a plain JSON schema object — spread it
+  if (typeof schema === 'object' && !('_def' in (schema as object))) {
+    return { type: 'object', ...(schema as Record<string, unknown>) };
   }
-  // Already a JSON schema object — ensure type is set
-  const obj = schema as Record<string, unknown>;
-  return { type: 'object', ...obj };
+  // Zod schema detected (_def field) — return a permissive object schema
+  // (avoids importing internal @langchain/core CJS paths not in exports field)
+  return { type: 'object', properties: {} };
 }
 
 function toAnthropicTools(tools: LangChainTool[]): AnthropicTool[] {
