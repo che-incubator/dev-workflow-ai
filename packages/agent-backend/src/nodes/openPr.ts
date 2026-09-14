@@ -42,20 +42,26 @@ async function buildPrDescription(state: State, isDraft: boolean): Promise<strin
   let whatItDoes = state.fixSummary;
   try {
     const context = isBatch
-      ? `This is a batch CVE dependency upgrade PR.
+      ? `Batch CVE dependency upgrade PR for eclipse-che/che-dashboard.
 Fix summary: ${state.fixSummary}
-CVE issues fixed:
-${batchIssues.map(i => `- ${i.jiraKey ?? i.url}: ${i.title ?? ''}`).join('\n')}
+CVE issues fixed (Jira keys and titles):
+${batchIssues.map(i => `- ${i.jiraKey ?? i.url.split('/').pop()}: ${i.title ?? '(CVE fix)'}`).join('\n')}
 Changed files: ${state.affectedFiles.join(', ')}`
-      : `Fix summary: ${state.fixSummary}
-Area: ${state.area}
-Changed files: ${state.affectedFiles.join(', ')}`;
+      : `che-dashboard PR. Fix summary: ${state.fixSummary}
+Area: ${state.area}. Changed files: ${state.affectedFiles.join(', ')}`;
 
     const resp = await llmDeep.invoke([new HumanMessage(
-      `Write a concise "What does this PR do?" section (2-6 sentences or bullet points) for a GitHub PR.
+      `Write the "What does this PR do?" section for a GitHub PR description.
+Follow this style (from che-dashboard PR conventions):
+- Lead with an action verb (Upgrades / Fixes / Adds / Removes)
+- For batch dep upgrades: numbered bold list of each package → what CVE it fixes
+- Be specific about versions if known from the issue titles
+- 3-8 lines total, no fluff, no passive voice
+
+Context:
 ${context}
-Rules: be specific about packages/versions if known; mention CVE IDs if present; no fluff.
-Respond with ONLY the section content, no heading.`,
+
+Respond with ONLY the section content (no heading, no markdown code fences).`,
     )]);
     const text = typeof resp.content === 'string' ? resp.content : JSON.stringify(resp.content);
     if (text.trim()) whatItDoes = text.trim();
@@ -66,21 +72,25 @@ Respond with ONLY the section content, no heading.`,
   // Issues fixed list
   const fixLines = isBatch
     ? batchIssues.map(i => `fixes ${i.url}`).join('\n')
-    : `fixes ${state.issueUrl || `#${state.issueNumber}`}`;
+    : `fixes ${state.issueUrl || (state.issueNumber ? `https://github.com/${state.repoSlug}/issues/${state.issueNumber}` : '')}`;
 
-  // Test plan for dep upgrades vs code changes
+  // Test plan — Template 4 (Dependency / CVE upgrade) from pr-test-section skill
   const isDepUpgrade = isBatch || /upgrad\w+|vulnerabilit|CVE/i.test(state.fixSummary);
+  const pkgList = state.affectedFiles
+    .filter(f => f.endsWith('package.json'))
+    .map(f => f.replace('packages/', '').replace('/package.json', ''))
+    .join(', ') || 'see package.json';
   const testPlan = isDepUpgrade
     ? `- No runtime logic changed — pure dependency upgrade.
 - \`yarn install\` resolves cleanly.
-- \`yarn license:generate\` completes without unresolved dependencies.
+- \`yarn license:generate\` completes without unresolved dependencies (\`${pkgList}\` updated in \`.deps/\` files).
 - \`yarn license:check\` passes.
 - \`yarn build\` succeeds with no new errors.
-- \`yarn test\` passes with all suites green.`
-    : `- [ ] Unit tests pass: \`yarn workspace @eclipse-che/dashboard-frontend test --testPathPatterns="<ComponentName>"\`
-- [ ] Lint and format clean: \`yarn lint:fix && yarn format:fix\`
-- [ ] Build succeeds: \`yarn build\`
-- [ ] Manual verification: ${state.fixSummary.toLowerCase()}`;
+- \`yarn test\` passes — all suites green.`
+    : `1. Deploy Eclipse Che with the dashboard image from this PR.
+2. Navigate to the affected area.
+3. Verify: ${state.fixSummary.toLowerCase()}
+- \`yarn test\` passes in changed packages.`;
 
   // Commit trailers (for the "Is it tested?" section attribution)
   const assistedBy = `Assisted-by: ${agentName()}`;
