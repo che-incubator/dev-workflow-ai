@@ -131,6 +131,48 @@ controller.devfile.io/mount-as: env
 
 > **Important**: `devfile.yaml` intentionally does **not** list credential env vars. Any `value: ""` in the devfile would override the secret injection with an empty string. Only non-sensitive config (`PGLITE_DATA_DIR`, `KNOWLEDGE_DIR`, `OLLAMA_MODEL`) is set in the devfile.
 
+### Alternative — inject individual secrets via `oc apply`
+
+Instead of the script, you can create one secret per credential manually. Each secret needs these labels so the DevWorkspace Operator mounts it as env vars:
+
+```bash
+# Encode your value first:
+echo -n 'your-actual-value' | base64
+```
+
+Then apply a secret for each variable you need:
+
+```bash
+oc apply -f - <<EOF
+kind: Secret
+apiVersion: v1
+metadata:
+  name: gemini-api-key
+  labels:
+    controller.devfile.io/mount-to-devworkspace: 'true'
+    controller.devfile.io/watch-secret: 'true'
+  annotations:
+    controller.devfile.io/mount-as: env
+data:
+  GEMINI_API_KEY: <base64-encoded-value>
+type: Opaque
+EOF
+```
+
+Repeat for each variable (use a different `name` per secret):
+
+| Secret name | `data` key | Description |
+|---|---|---|
+| `github-token` | `GITHUB_TOKEN` | GitHub PAT for opening PRs |
+| `anthropic-api-key` | `ANTHROPIC_API_KEY` | Claude direct API key |
+| `gemini-api-key` | `GEMINI_API_KEY` | Gemini API key |
+| `jira-credentials` | `JIRA_TOKEN`, `JIRA_EMAIL` | Jira access (one secret, two keys) |
+| `vertex-credentials` | `ANTHROPIC_VERTEX_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS_JSON` | Vertex AI (one secret, two keys) |
+
+> Multiple keys in one secret are fine — add them as separate entries under `data`.
+
+---
+
 ### Step 3 — Open the workspace
 
 ```
