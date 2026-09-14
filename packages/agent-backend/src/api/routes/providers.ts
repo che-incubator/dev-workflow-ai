@@ -168,8 +168,17 @@ export const providersRoutes: FastifyPluginAsync = async app => {
   app.post<{
     Body: Partial<ProviderRow> & { provider_id: string };
   }>('/', async (req, reply) => {
-    const { provider_id, label, api_key, base_url, model, is_active } = req.body;
+    const { provider_id, label, base_url, model, is_active } = req.body;
     if (!provider_id) return reply.status(400).send({ error: 'provider_id is required' });
+
+    // Fall back to env var when no explicit key is provided
+    const ENV_KEYS: Record<string, string> = {
+      gemini:    process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? '',
+      anthropic: process.env.ANTHROPIC_API_KEY ?? '',
+      openai:    process.env.OPENAI_API_KEY ?? '',
+      vertex:    process.env.ANTHROPIC_VERTEX_PROJECT_ID ?? '',
+    };
+    const api_key = req.body.api_key || ENV_KEYS[provider_id] || '';
 
     if (is_active) {
       await db.query('UPDATE llm_providers SET is_active = false, updated_at = now()');
