@@ -29,6 +29,8 @@ trap 'kill 0' SIGINT SIGTERM EXIT
 if [[ -f "$ROOT/.env" ]]; then
   set -a; source "$ROOT/.env"; set +a
   echo "[dev] Loaded .env"
+else
+  echo "[dev] No .env file found — using env vars from shell / injected secrets"
 fi
 
 # PGlite persistent storage — no postgres server needed
