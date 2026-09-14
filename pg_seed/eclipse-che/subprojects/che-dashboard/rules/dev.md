@@ -1,7 +1,5 @@
 # che-dashboard Development Conventions
 
-Adapted from the real rules in che-dashboard/.claude/rules/che-dashboard-dev.md for AI agent use. Run commands in the listed order — do not skip steps.
-
 ---
 
 ## 1. Commit Trailers
@@ -13,11 +11,11 @@ Assisted-by: {AGENT_NAME}
 Signed-off-by: {AUTHOR_NAME} <{AUTHOR_EMAIL}>
 ```
 
-`{AGENT_NAME}` — specific agent name, e.g. `Claude Sonnet 4.6`.
+`{AGENT_NAME}` — specific agent name, e.g. `Claude Sonnet 4.6`.  
 `{AUTHOR_NAME}` / `{AUTHOR_EMAIL}` — from `git config user.name` / `git config user.email`.
 
-**Do NOT add:** `Made-with`, `Co-authored-by`, or duplicate trailers.
-**Do NOT add** AI explanation comments inside source code.
+**Do NOT add:** `Made-with`, `Co-authored-by`, or duplicate trailers.  
+**Do NOT add** AI explanation comments inside source code.  
 **On amend:** always pass the full message with `-m "..."` so trailers are not stacked.
 
 ### Commit message format
@@ -28,7 +26,7 @@ Signed-off-by: {AUTHOR_NAME} <{AUTHOR_EMAIL}>
 ### Example
 
 ```
-fix(ui): prevent error message from overflowing
+fix(ui): prevent error message from overflowing the ErrorReporter widget
 
 Assisted-by: Claude Sonnet 4.6
 Signed-off-by: Jane Developer <jane@example.com>
@@ -36,50 +34,33 @@ Signed-off-by: Jane Developer <jane@example.com>
 
 ---
 
-## 2. Surgical Change Workflow (MANDATORY — in order)
+## 2. Pre-commit Checks
 
-### Step 1: Run targeted tests
-
-```bash
-# Frontend component
-yarn workspace @eclipse-che/dashboard-frontend test --testPathPatterns="<ComponentName>" --no-cache
-
-# Backend route
-yarn workspace @eclipse-che/dashboard-backend test --testPathPatterns="<route-name>" --no-cache
-```
-
-Fix all failures before step 2.
-
-### Step 2: Format
-
-```bash
-yarn format:fix
-```
-
-Fix all issues before step 3.
-
-### Step 3: Lint
+**Before each commit** (fast — run every time):
 
 ```bash
 yarn lint:fix
+yarn format:fix
+yarn workspace @eclipse-che/dashboard-frontend test --testPathPatterns="ComponentName" --no-cache
 ```
 
-Fix all issues before committing.
-
-### Pre-push (full suite)
+**Before pushing / opening a PR** (full suite):
 
 ```bash
-yarn build && yarn test
+yarn build
+yarn test
 ```
 
-**Mandatory for all branches** — dep upgrades cause test failures that only show in CI without this.
+**This is mandatory for ALL branches, including pure dependency upgrades.** Dep upgrades routinely cause test suite failures (new API shapes, changed exports, peer dep mismatches) that only appear in CI if not caught locally first. Always run `yarn build && yarn test` before any `git push`.
+
+Follow the Surgical Change Workflow in `AGENTS.md` — targeted test runs before commit, full suite before push.
 
 ### Updating snapshots
 
 When rendering changes break existing snapshots:
 
 ```bash
-yarn workspace @eclipse-che/dashboard-frontend test --testPathPatterns="<ComponentName>" --updateSnapshot
+yarn workspace @eclipse-che/dashboard-frontend test --testPathPatterns="ComponentName" --updateSnapshot
 ```
 
 Always verify the snapshot diff makes sense before committing.
@@ -109,7 +90,7 @@ Then re-run `yarn license:generate`. Remove entries for packages no longer in `y
 This project uses `stylelint-config-clean-order`. Follow these group conventions:
 
 | Group | Properties |
-|---|---|
+|-------|-----------|
 | Layout | `position`, `z-index`, `overflow`, `overflow-x`, `overflow-y`, `display`, `flex-*`, `grid-*` |
 | Box/Size | `box-sizing`, `width`, `min-width`, `max-width`, `height`, `margin`, `padding` |
 | Typography | `font-*`, `color`, `text-*`, `word-break`, `white-space`, `line-height` |
@@ -121,16 +102,7 @@ This project uses `stylelint-config-clean-order`. Follow these group conventions
 
 ---
 
-## 5. TypeScript Rules
-
-- **No `any` type**: never use `any` or cast to `any`. Use proper types, type guards, `unknown`, or specific interfaces.
-- **Absolute imports only**: always use `@/` alias. Never `./` or `../` for non-adjacent files.
-- **Strict mode**: all code must pass `tsc --noEmit` in strict mode.
-- External API untyped values: define an interface or use `isKubeClientError()` from `@eclipse-che/common`.
-
----
-
-## 6. Error Handling
+## 5. Error Handling
 
 Use typed error classes with status codes instead of string matching:
 
@@ -152,7 +124,7 @@ reply.status(statusCode).send(helpers.errors.getMessage(e));
 
 ---
 
-## 7. Git Workflow Patterns
+## 6. Git Workflow Patterns
 
 ### Squash all branch commits into one
 
@@ -162,7 +134,21 @@ git add -A
 git commit -m "feat: ..."
 ```
 
-### Resolve .deps merge conflicts during rebase
+### Strip forbidden trailers from new local commits (not yet pushed)
+
+Use only on commits that have never been pushed. Once a branch has a remote tracking branch, use `git rebase -i` to reword commit messages instead.
+
+```bash
+FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter \
+  'sed "/^Made-with:/d; /^Co-authored-by:/d"' \
+  -- HEAD~1..HEAD
+
+git update-ref -d refs/original/refs/heads/$(git branch --show-current)
+```
+
+Note: `--msg-filter` only rewrites commit messages — no stash needed.
+
+### Resolve .deps merge conflicts
 
 ```bash
 git checkout --theirs .deps/EXCLUDED/dev.md .deps/EXCLUDED/prod.md
@@ -171,50 +157,13 @@ git add .deps/EXCLUDED/dev.md .deps/EXCLUDED/prod.md
 
 Then re-run `yarn license:generate` after the rebase continues.
 
-### Strip forbidden trailers (local only, never pushed)
-
-```bash
-FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter \
-  'sed "/^Made-with:/d; /^Co-authored-by:/d"' \
-  -- HEAD~1..HEAD
-git update-ref -d refs/original/refs/heads/$(git branch --show-current)
-```
-
 ---
 
-## 8. Accessibility and UI Conventions
+## 7. Accessibility and UI Conventions
 
 - Icon hover color: `var(--pf-t--global--icon--color--subtle)` default, `var(--pf-t--global--text--color--link--default)` on hover
-- Tooltip `<a>` link colors: inverse background — dark tokens in light theme, light tokens in dark theme
+- Tooltip `<a>` link colors: inverse background — use dark tokens in light theme, light tokens in dark theme (see the tooltip CSS module)
 - Keyboard toggle for `Switch`: wrap in `<div onKeyDown>` and handle `Enter`
 - Keyboard selection in `Select`/`SelectOption` with `hasCheckbox`: add explicit `onKeyDown` on each `SelectOption`
 - `ErrorReporter` overlay: `position: fixed; inset: 0; z-index: 9999`
 - Error `<pre>` blocks: `max-width: 100%; overflow-x: auto`
-
----
-
-## 9. Cluster Testing (when needed)
-
-Compile TypeScript before building Docker image — Dockerfile copies from `lib/`, not `src/`:
-
-```bash
-yarn workspace @eclipse-che/dashboard-backend build   # backend changes
-yarn workspace @eclipse-che/dashboard-frontend build  # frontend changes
-yarn build                                             # both
-```
-
-Build multi-arch image:
-
-```bash
-export IMAGE_REGISTRY_HOST=<host>
-export IMAGE_REGISTRY_USER_NAME=<user>
-export PLATFORMS=linux/amd64,linux/arm64
-./run/build-multiarch.sh
-```
-
-Patch cluster via CheCluster CR — never `kubectl patch deploy` directly (operator reverts it):
-
-```bash
-kubectl patch checluster <cr-name> -n <namespace> --type=json \
-  -p='[{"op":"replace","path":"/spec/components/dashboard/deployment/containers/0","value":{"name":"che-dashboard","image":"<image>","imagePullPolicy":"Always"}}]'
-```

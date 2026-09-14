@@ -265,6 +265,14 @@ export async function implementDepUpgradeNode(state: State): Promise<Partial<Sta
     };
   }
 
+  // 4b. Regenerate license files — required when yarn.lock changes (che-dashboard rule §3)
+  try {
+    await execAsync('yarn license:generate', { cwd: repoRoot, timeout: 120_000 });
+  } catch (e) {
+    // Non-fatal: warn but don't block the upgrade
+    console.warn(`[dep-upgrade] yarn license:generate failed — ${e instanceof Error ? e.message.slice(0, 200) : e}`);
+  }
+
   // 5. Verify installed version
   let installedVersion = '?';
   try {
@@ -406,6 +414,13 @@ async function implementBatchDepUpgrade(state: State): Promise<Partial<State>> {
     await execAsync('yarn install --silent', { cwd: repoRoot, timeout: 180_000 });
   } catch (e) {
     return { messages: [`batch_dep_upgrade: yarn install failed — ${e instanceof Error ? e.message : String(e)}`], status: 'failed' };
+  }
+
+  // Regenerate license files — required when yarn.lock changes (che-dashboard rule §3)
+  try {
+    await execAsync('yarn license:generate', { cwd: repoRoot, timeout: 120_000 });
+  } catch (e) {
+    console.warn(`[batch-dep-upgrade] yarn license:generate failed — ${e instanceof Error ? e.message.slice(0, 200) : e}`);
   }
 
   const upgradeList = upgrades.map(u => `${u.packageName}@${u.resolvedVersion}`).join(', ');
