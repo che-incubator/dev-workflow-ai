@@ -90,16 +90,55 @@ When multiple CVE / Security issues are open, the **Batch CVE fix** button on th
 
 ## Open in Eclipse Che
 
+### Step 1 — Create the OpenShift secret (once, before opening the workspace)
+
+Env vars are injected into the workspace via an OpenShift Secret. Create it **before** opening the workspace — otherwise the agent starts without credentials.
+
+```bash
+# Login to your OpenShift cluster first
+oc login https://<your-ocp-api-url> -u <user> -p <password>
+
+# Create the secret (reads GITHUB_TOKEN from env, GCP SA from file)
+export GITHUB_TOKEN=ghp_...
+./run/create-ocp-secret.sh \
+  --namespace <your-workspace-namespace> \
+  --sa-file ~/gcp-sa-claude.json
+```
+
+The script creates a Secret named `dev-workflow-ai-secrets` with these labels:
+
+```yaml
+controller.devfile.io/mount-to-devworkspace: "true"
+controller.devfile.io/mount-as: env
+```
+
+The DevWorkspace Operator reads these labels and automatically injects all Secret keys as environment variables into every DevWorkspace pod in that namespace. No changes to `devfile.yaml` needed.
+
+**Secret contains:**
+
+| Key | Value source |
+|---|---|
+| `GITHUB_TOKEN` | `--github-token` or `$GITHUB_TOKEN` env var |
+| `ANTHROPIC_VERTEX_PROJECT_ID` | extracted from the GCP service account JSON |
+| `GOOGLE_APPLICATION_CREDENTIALS_JSON` | full content of the SA key file |
+| `CLOUD_ML_REGION` | `us-east5` (edit in the script if different) |
+| `VERTEX_CLAUDE_MODEL` | `claude-sonnet-4-6@default` |
+
+> **Without `GITHUB_TOKEN`** the agent runs in dry-run mode — it writes the PR description and patch to `output/` instead of opening a real PR.
+
+### Step 2 — Open the workspace
+
 ```
 https://<your-che-host>/f?url=https://github.com/olexii4/dev-workflow-ai
 ```
 
-Eclipse Che reads `devfile.yaml`, provisions a single container (PGlite embedded — no sidecar needed), and exposes the agent UI at port 3000 automatically.
+Eclipse Che reads `devfile.yaml`, provisions a single container (PGlite embedded — no sidecar needed), and exposes the agent UI at port 3000. Credentials from the secret are available immediately as env vars.
 
-Set credentials once via the OpenShift secret:
+To verify the secret is mounted inside the workspace:
 
 ```bash
-./run/create-ocp-secret.sh
+echo $GITHUB_TOKEN
+echo $ANTHROPIC_VERTEX_PROJECT_ID
 ```
 
 ---
