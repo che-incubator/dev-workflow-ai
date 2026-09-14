@@ -23,6 +23,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { readdir, stat } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
+import { db } from '../../db/client.js';
 import { getSetting, setSetting } from '../../db/settingsHelper.js';
 
 const ROOT = resolve(process.cwd());
