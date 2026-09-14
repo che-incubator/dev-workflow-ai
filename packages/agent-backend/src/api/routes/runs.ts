@@ -64,7 +64,7 @@ async function projectForJiraKey(key: string): Promise<string | null> {
   const prefix = key.replace(/-\d+$/, '');
   const { rows: ctx } = await db.query<{ project_slug: string }>(
     `SELECT c.project_slug FROM contexts c
-     JOIN projects p ON p.slug = c.project_slug
+     JOIN projects p ON p.name = c.project_slug
      WHERE c.content LIKE $1 LIMIT 1`,
     [`%${prefix}-%`],
   );

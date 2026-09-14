@@ -123,6 +123,7 @@ function IssuesSourcesSection({
   const [srcFilter, setSrcFilter] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [newUrl, setNewUrl] = useState('');
+  const [urlError, setUrlError] = useState('');
   const [adding, setAdding] = useState(false);
   const [syncing, setSyncing] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -148,8 +149,16 @@ function IssuesSourcesSection({
     });
   }
 
+  function validateUrl(url: string): string {
+    if (!url.trim()) return 'URL is required';
+    try { new URL(url.trim()); } catch { return 'Must be a valid URL (e.g. https://github.com/owner/repo)'; }
+    return '';
+  }
+
   async function handleAdd(): Promise<void> {
-    if (!newUrl.trim()) return;
+    const err = validateUrl(newUrl);
+    if (err) { setUrlError(err); return; }
+    setUrlError('');
     setAdding(true);
     try {
       await addSource(newUrl.trim());
@@ -225,13 +234,13 @@ function IssuesSourcesSection({
             <TextInput
               id="sources-url-input"
               value={newUrl}
-              onChange={(_e, v) => setNewUrl(v)}
+              onChange={(_e, v) => { setNewUrl(v); if (urlError) setUrlError(''); }}
               placeholder="GitHub repository URL or Jira board URL"
               aria-label="New source URL"
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleAdd();
-              }}
+              validated={urlError ? 'error' : 'default'}
+              onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
             />
+            {urlError && <span style={{ color: 'var(--pf-t--global--color--status--danger--default)', fontSize: '0.8rem' }}>{urlError}</span>}
           </FlexItem>
           <FlexItem>
             <Button id="sources-add-btn" variant="primary" isDisabled={adding || !newUrl.trim()} onClick={handleAdd}>
@@ -581,9 +590,20 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
                     ) : item.url}
                   </Td>
                   <Td>
-                    {item.title
-                      ? <span style={{ fontSize: '0.9rem' }}>{item.title}</span>
-                      : <Spinner size="sm" aria-label="Loading title" />}
+                    {item.title ? (
+                      <Tooltip
+                        content={
+                          <div style={{ maxWidth: '400px', whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>
+                            <strong>{item.title}</strong>
+                          </div>
+                        }
+                        position="bottom"
+                      >
+                        <span style={{ fontSize: '0.9rem', cursor: 'default' }}>
+                          {item.title.length > 80 ? item.title.slice(0, 77) + '…' : item.title}
+                        </span>
+                      </Tooltip>
+                    ) : <Spinner size="sm" aria-label="Loading title" />}
                   </Td>
                   <Td>
                     <Label color={item.forceP ? 'orange' : 'blue'} isCompact>
@@ -642,9 +662,10 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
 
 type IssueView = 'all' | 'prioritized' | 'skipped';
 
-function CveBatchButton() {
+function CveBatchButton({ cveCount }: { cveCount: number }) {
   const { addAlert } = useAlerts();
   const [loading, setLoading] = React.useState(false);
+  const isDisabled = loading || cveCount <= 1;
 
   async function handleBatch(): Promise<void> {
     setLoading(true);
@@ -662,11 +683,11 @@ function CveBatchButton() {
     <Button
       id="cve-batch-btn"
       variant="secondary"
-      isDisabled={loading}
+      isDisabled={isDisabled}
       onClick={() => void handleBatch()}
-      title="Combine all open CVE / Security issues into one PR"
+      title={cveCount <= 1 ? `Need ≥2 CVE issues (found ${cveCount})` : `Batch fix ${cveCount} CVE issues in one PR`}
     >
-      {loading ? <><Spinner size="sm" /> Running…</> : 'Batch CVE fix'}
+      {loading ? <><Spinner size="sm" /> Running…</> : `Batch CVE fix${cveCount > 1 ? ` (${cveCount})` : ''}`}
     </Button>
   );
 }
@@ -680,6 +701,15 @@ function AllIssuesSection({
 }) {
   const { addAlert } = useAlerts();
   const [view, setView] = useState<IssueView>('all');
+
+  const cveCount = useMemo(() =>
+    issues.filter(i =>
+      i.status === 'open' && (
+        /CVE-\d{4}-\d+/i.test(i.title) ||
+        (i.labels ?? []).some(l => l === 'Security' || l === 'security')
+      )
+    ).length,
+  [issues]);
   const [search, setSearch] = useState('');
   const [skippedIds, setSkippedIds] = useState<Set<number>>(new Set());
   const [starting, setStarting] = useState<string | null>(null);
@@ -776,9 +806,6 @@ function AllIssuesSection({
           <FlexItem>
             <Flex gap={{ default: 'gapSm' }} alignItems={{ default: 'alignItemsCenter' }}>
               <FlexItem>
-                <CveBatchButton />
-              </FlexItem>
-              <FlexItem>
             <SearchInput
               id="issues-filter"
               placeholder="Filter by"
@@ -788,6 +815,9 @@ function AllIssuesSection({
               aria-label="Filter issues"
               style={{ width: '220px' }}
             />
+              </FlexItem>
+              <FlexItem>
+                <CveBatchButton cveCount={cveCount} />
               </FlexItem>
             </Flex>
           </FlexItem>
@@ -834,8 +864,12 @@ function AllIssuesSection({
                     </Td>
                     <Td>
                       <Tooltip
-                        content={issue.body || issue.title}
-                        isVisible={undefined}
+                        content={
+                          <div style={{ maxWidth: '400px', whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>
+                            <strong>{issue.title}</strong>
+                            {issue.body ? <><br /><br />{issue.body.slice(0, 600)}{issue.body.length > 600 ? '…' : ''}</> : null}
+                          </div>
+                        }
                         position="bottom"
                       >
                         <div style={{ cursor: 'default' }}>{shortTitle}</div>

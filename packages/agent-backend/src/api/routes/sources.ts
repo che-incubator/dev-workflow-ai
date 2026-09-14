@@ -129,6 +129,20 @@ function scoreIssue(labels: string[], titleHint = ''): { score: number; priority
   return { score, priority };
 }
 
+function adfToText(node: unknown): string {
+  if (!node || typeof node !== 'object') return '';
+  const n = node as Record<string, unknown>;
+  if (n.type === 'text' && typeof n.text === 'string') return n.text;
+  const children = (n.content ?? []) as unknown[];
+  return children.map(adfToText).join(n.type === 'paragraph' ? '\n' : '');
+}
+
+function jiraStoryPoints(fields: Record<string, unknown>): number {
+  // Jira Cloud uses customfield_10028 for Story Points
+  const v = fields['customfield_10028'] ?? fields['story_points'] ?? fields['customfield_10016'];
+  return typeof v === 'number' ? Math.round(v) : 0;
+}
+
 function estimateStoryPoints(body: string, title: string): number {
   const text = (title + ' ' + body).toLowerCase();
   if (text.includes('typo') || text.includes('minor') || text.includes('bump version')) return 1;
@@ -564,7 +578,7 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
       const bodyPayload: Record<string, unknown> = {
         jql,
         maxResults,
-        fields: ['summary', 'status', 'priority', 'labels', 'issuetype', 'updated'],
+        fields: ['summary', 'description', 'status', 'priority', 'labels', 'issuetype', 'updated', 'customfield_10028'],
       };
       if (nextPageToken) bodyPayload.nextPageToken = nextPageToken;
 
@@ -586,11 +600,12 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
       const data = await res.json() as {
         issues: Array<{
           key: string;
-          fields: {
+          fields: Record<string, unknown> & {
             summary: string;
             status?: { name: string };
             priority?: { name: string };
             labels?: string[];
+            description?: unknown;
           };
         }>;
         nextPageToken?: string;
@@ -600,6 +615,7 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
         const { key, fields } = issue;
         const issueUrl = `${jiraBase}/browse/${key}`;
         const title = fields.summary;
+        const body = fields.description ? adfToText(fields.description).slice(0, 4000) : '';
         const rawPriority = (fields.priority?.name ?? '').toLowerCase();
         const priority = rawPriority.includes('critical') ? 'critical'
           : rawPriority.includes('major') || rawPriority.includes('high') ? 'major'
@@ -608,16 +624,18 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
           : '';
 
         const { score: issScore } = scoreIssue(fields.labels ?? [], title);
+        const sp = jiraStoryPoints(fields) || estimateStoryPoints(body, title);
 
         await db.query(
-          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, raw, fetched_at)
-           VALUES ($1, $2, $3, $4, '', $5, 'open', $6, $7, $8, now())
+          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, story_points, raw, fetched_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, $8, $9, $10, now())
            ON CONFLICT (source_id, external_id) DO UPDATE SET
-             title = EXCLUDED.title, labels = EXCLUDED.labels,
+             title = EXCLUDED.title, body = EXCLUDED.body, labels = EXCLUDED.labels,
              status = 'open', priority = EXCLUDED.priority,
-             score = EXCLUDED.score, raw = EXCLUDED.raw, fetched_at = now()`,
-          [sourceId, key, title, issueUrl, fields.labels ?? [],
-           priority, issScore, JSON.stringify(fields)],
+             score = EXCLUDED.score, story_points = EXCLUDED.story_points,
+             raw = EXCLUDED.raw, fetched_at = now()`,
+          [sourceId, key, title, issueUrl, body, fields.labels ?? [],
+           priority, issScore, sp, JSON.stringify(fields)],
         );
         upserted++;
       }
@@ -684,7 +702,7 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
     const bodyPayload: Record<string, unknown> = {
       jql,
       maxResults,
-      fields: ['summary', 'status', 'priority', 'labels', 'issuetype', 'updated'],
+      fields: ['summary', 'description', 'status', 'priority', 'labels', 'issuetype', 'updated', 'customfield_10028'],
     };
     if (nextPageToken) bodyPayload.nextPageToken = nextPageToken;
 
@@ -706,11 +724,12 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
     const data = await res.json() as {
       issues: Array<{
         key: string;
-        fields: {
+        fields: Record<string, unknown> & {
           summary: string;
           status?: { name: string };
           priority?: { name: string };
           labels?: string[];
+          description?: unknown;
         };
       }>;
       nextPageToken?: string;
@@ -719,6 +738,7 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
     for (const issue of data.issues) {
       const { key, fields } = issue;
       const issueUrl = `${jiraBase}/browse/${key}`;
+      const body = fields.description ? adfToText(fields.description).slice(0, 4000) : '';
       const rawPriority = (fields.priority?.name ?? '').toLowerCase();
       const priority = rawPriority.includes('critical') ? 'critical'
         : rawPriority.includes('major') || rawPriority.includes('high') ? 'major'
@@ -727,16 +747,18 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
         : '';
 
       const { score: issueScore } = scoreIssue(fields.labels ?? [], fields.summary);
+      const sp = jiraStoryPoints(fields) || estimateStoryPoints(body, fields.summary);
 
       await db.query(
-        `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, raw, fetched_at)
-         VALUES ($1, $2, $3, $4, '', $5, 'open', $6, $7, $8, now())
+        `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, story_points, raw, fetched_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, $8, $9, $10, now())
          ON CONFLICT (source_id, external_id) DO UPDATE SET
-           title = EXCLUDED.title, labels = EXCLUDED.labels,
+           title = EXCLUDED.title, body = EXCLUDED.body, labels = EXCLUDED.labels,
            status = 'open', priority = EXCLUDED.priority,
-           score = EXCLUDED.score, raw = EXCLUDED.raw, fetched_at = now()`,
-        [source.id, key, fields.summary, issueUrl, fields.labels ?? [],
-         priority, issueScore, JSON.stringify(fields)],
+           score = EXCLUDED.score, story_points = EXCLUDED.story_points,
+           raw = EXCLUDED.raw, fetched_at = now()`,
+        [source.id, key, fields.summary, issueUrl, body, fields.labels ?? [],
+         priority, issueScore, sp, JSON.stringify(fields)],
       );
       upserted++;
     }

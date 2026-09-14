@@ -13,6 +13,7 @@
 import { runMigrations } from './db/migrations.js';
 import { importKnowledge } from './init/importKnowledge.js';
 import { seedDefaultProviders } from './api/routes/providers.js';
+import { seedDefaultSources } from './init/seedSources.js';
 import { buildServer } from './api/server.js';
 import { startAutorunScheduler } from './scheduler/autorun.js';
 
@@ -24,6 +25,7 @@ async function main() {
 
   console.log('[boot] Seeding default LLM providers…');
   await seedDefaultProviders();
+  await seedDefaultSources();
 
   const knowledgeDir = process.env.KNOWLEDGE_DIR ?? '/knowledge';
   console.log(`[boot] Importing knowledge from ${knowledgeDir}…`);
