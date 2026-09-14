@@ -54,9 +54,11 @@ function buildPureLLM() {
 
 export async function analyzeNode(state: State): Promise<Partial<State>> {
   const context = await loadContext(state.project, [
-    'context', 'rules-dev',
-    'skills-analyze-issue',   // project-specific analyze skill (if present)
-    'issues-jira-cve',        // seeded Jira CVE issues for che-dashboard
+    'context',                  // project description, stack, local_path
+    'rules-issue-analysis',     // shared: how to identify affected files and scope
+    'rules-issue-filtering',    // shared: scoring rules, priority boosts, CVE handling
+    'rules-cve-batch',          // shared: CVE batch rules and priority
+    'skills-analyze-issue',     // project-specific analyze skill (if present)
   ]);
 
   // Fetch issue data — try DB first (works for Jira + GitHub), then GitHub API

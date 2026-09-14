@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { State } from '../agent/state.js';
-import { loadProjectConfig } from '../context/loader.js';
+import { loadContext, loadProjectConfig } from '../context/loader.js';
 import { getSetting } from '../db/settingsHelper.js';
 import { llmDeep } from '../llm/client.js';
 import { HumanMessage } from '@langchain/core/messages';
@@ -38,6 +38,13 @@ async function buildPrDescription(state: State, isDraft: boolean): Promise<strin
   const isBatch = state.isBatch && (state.batchIssues ?? []).length > 0;
   const batchIssues = state.batchIssues ?? [];
 
+  // Load PR template and description skill — only what the PR writer needs
+  const prContext = await loadContext(state.project, [
+    'context-pr-template',    // .github/PULL_REQUEST_TEMPLATE.md
+    'skills-pr-description',  // writing style guide
+    'skills-pr-test-section', // test section templates
+  ]).catch(() => '');  // non-fatal — fall back to template if context not loaded
+
   // Generate "What does this PR do?" using LLM for richer content
   let whatItDoes = state.fixSummary;
   try {
@@ -51,14 +58,14 @@ Changed files: ${state.affectedFiles.join(', ')}`
 Area: ${state.area}. Changed files: ${state.affectedFiles.join(', ')}`;
 
     const resp = await llmDeep.invoke([new HumanMessage(
-      `Write the "What does this PR do?" section for a GitHub PR description.
-Follow this style (from che-dashboard PR conventions):
+      `${prContext ? `PROJECT PR CONVENTIONS:\n${prContext}\n\n` : ''}Write the "What does this PR do?" section for a GitHub PR description.
+Follow this style:
 - Lead with an action verb (Upgrades / Fixes / Adds / Removes)
-- For batch dep upgrades: numbered bold list of each package → what CVE it fixes
-- Be specific about versions if known from the issue titles
+- For batch dep upgrades: numbered bold list, each entry = package + what CVE it fixes
+- Be specific about versions and CVE IDs from the issue titles
 - 3-8 lines total, no fluff, no passive voice
 
-Context:
+PR context:
 ${context}
 
 Respond with ONLY the section content (no heading, no markdown code fences).`,
