@@ -7,14 +7,13 @@
 #
 # SPDX-License-Identifier: EPL-2.0
 #
-# run/run-local-podman.sh — build and run dev-workflow-ai locally with Podman
+# run/run-local-podman.sh — run dev-workflow-ai locally with Podman (pre-built image)
 #
 # Default mode: single container, PGlite embedded database (no postgres needed).
 # Optional:     --with-postgres  uses a Podman pod + postgres sidecar instead.
 #
 # Usage:
 #   ./run/run-local-podman.sh                  # PGlite, pull image, start
-#   ./run/run-local-podman.sh --no-build        # PGlite, skip build, use cached image
 #   ./run/run-local-podman.sh --with-postgres   # postgres sidecar via Podman pod
 #   ./run/run-local-podman.sh --with-ollama     # also start Ollama container
 #   ./run/run-local-podman.sh --stop            # stop and remove container/pod
@@ -33,14 +32,12 @@ ROOT="$(dirname "$SCRIPT_DIR")"
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 
-BUILD=true
 WITH_POSTGRES=false
 WITH_OLLAMA=false
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}"
 
 for arg in "$@"; do
   case "$arg" in
-    --no-build)      BUILD=false ;;
     --with-postgres) WITH_POSTGRES=true ;;
     --with-ollama)   WITH_OLLAMA=true ;;
     --stop)
@@ -77,28 +74,15 @@ if [[ "$(uname)" == "Darwin" ]] && ! podman info &>/dev/null 2>&1; then
   sleep 5
 fi
 
-# ── Build (optional) ──────────────────────────────────────────────────────────
+# ── Pull image ────────────────────────────────────────────────────────────────
 
-if [[ "$BUILD" == "true" ]]; then
-  echo "==> Building $APP_IMAGE ..."
-  podman build -f "$ROOT/build/dockerfiles/Dockerfile" -t "$APP_IMAGE" "$ROOT"
-  echo "Build complete."
-else
-  echo "==> Pulling $APP_IMAGE (if not cached)..."
-  podman pull "$APP_IMAGE" 2>/dev/null || true
-fi
+echo "==> Pulling $APP_IMAGE (if not cached)..."
+podman pull "$APP_IMAGE" 2>/dev/null || true
 
-# ── Start Ollama (optional) ───────────────────────────────────────────────
+# ── Start Ollama (optional) ───────────────────────────────────────────────────
 
 OLLAMA_URL=""
 if [[ "$WITH_OLLAMA" == "true" ]]; then
-  echo "==> Building Ollama image with model: $OLLAMA_MODEL ..."
-  podman build \
-    --build-arg "OLLAMA_MODEL=$OLLAMA_MODEL" \
-    -f "$ROOT/build/dockerfiles/ollama.Dockerfile" \
-    -t "dev-workflow-ai-ollama:latest" \
-    "$ROOT"
-
   podman stop dev-workflow-ai-ollama 2>/dev/null || true
   podman rm -f dev-workflow-ai-ollama 2>/dev/null || true
 
@@ -106,8 +90,11 @@ if [[ "$WITH_OLLAMA" == "true" ]]; then
   podman run -d \
     --name dev-workflow-ai-ollama \
     -p 11434:11434 \
-    dev-workflow-ai-ollama:latest
+    docker.io/ollama/ollama:latest
   OLLAMA_URL="http://localhost:11434"
+
+  echo "    Pulling model $OLLAMA_MODEL inside Ollama..."
+  podman exec dev-workflow-ai-ollama ollama pull "$OLLAMA_MODEL"
 
   echo "    Waiting for Ollama to be ready..."
   for i in $(seq 1 30); do

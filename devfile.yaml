@@ -8,9 +8,8 @@ components:
   - name: tools
     container:
       image: quay.io/oorel/dev-workflow-ai:latest
-      args: ["tail", "-f", "/dev/null"]
-      memoryLimit: 4G
-      memoryRequest: 512Mi
+      memoryLimit: 6G
+      memoryRequest: 1024Mi
       cpuRequest: 1000m
       cpuLimit: 4000m
       mountSources: true

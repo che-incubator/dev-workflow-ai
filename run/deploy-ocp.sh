@@ -7,7 +7,7 @@
 #
 # SPDX-License-Identifier: EPL-2.0
 #
-# run/deploy-ocp.sh — build the Docker image and deploy dev-workflow-ai to OpenShift
+# run/deploy-ocp.sh — deploy dev-workflow-ai to OpenShift using a pre-built image
 #
 # Usage:
 #   ./run/deploy-ocp.sh [options]
@@ -17,7 +17,6 @@
 #   --tag,       -t  image tag (default: latest)
 #   --registry       registry host override
 #   --user           registry user/org override
-#   --skip-build     skip Docker build and push (use existing image)
 #
 # Required env vars (unless overridden via flags):
 #   IMAGE_REGISTRY_HOST      e.g. quay.io
@@ -39,8 +38,6 @@ NS="${DEPLOY_NAMESPACE:-dev-workflow-ai}"
 IMAGE_REGISTRY_HOST="${IMAGE_REGISTRY_HOST:-}"
 IMAGE_REGISTRY_USER_NAME="${IMAGE_REGISTRY_USER_NAME:-}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
-PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
-SKIP_BUILD=false
 SECRET_NAME="dev-workflow-ai-secrets"
 
 while [[ $# -gt 0 ]]; do
@@ -49,7 +46,6 @@ while [[ $# -gt 0 ]]; do
     --tag|-t)       IMAGE_TAG="$2";             shift 2 ;;
     --registry)     IMAGE_REGISTRY_HOST="$2";   shift 2 ;;
     --user)         IMAGE_REGISTRY_USER_NAME="$2"; shift 2 ;;
-    --skip-build)   SKIP_BUILD=true;            shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -64,18 +60,7 @@ fi
 
 IMAGE="${IMAGE_REGISTRY_HOST}/${IMAGE_REGISTRY_USER_NAME}/dev-workflow-ai:${IMAGE_TAG}"
 
-# ── 1. Build & push ────────────────────────────────────────────────────────────
-
-if [[ "$SKIP_BUILD" == "false" ]]; then
-  echo "→ Building image: ${IMAGE}"
-  IMAGE_REGISTRY_HOST="$IMAGE_REGISTRY_HOST" \
-  IMAGE_REGISTRY_USER_NAME="$IMAGE_REGISTRY_USER_NAME" \
-  IMAGE_TAG="$IMAGE_TAG" \
-  PLATFORMS="$PLATFORMS" \
-  "${ROOT}/build/build.sh" --multiarch
-else
-  echo "→ Skipping build (--skip-build), using: ${IMAGE}"
-fi
+echo "→ Deploying image: ${IMAGE}"
 
 # ── 2. Namespace ───────────────────────────────────────────────────────────────
 

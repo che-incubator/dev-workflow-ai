@@ -34,9 +34,6 @@ dev-workflow-ai/
 │   ├── shared/skills/               ← run-loop, pick-issue, filter-issues, batch-cve-fix
 │   └── subprojects/<name>/          ← Per-project context, rules, skills
 │       └── che-dashboard/           ← context.md, rules/dev.md, skills/fix-cve-dep, …
-├── build/
-│   ├── build.sh                     ← Unified build: --ui-only, --api-only, --multiarch
-│   └── dockerfiles/                 ← App image (fedora/nodejs-20-minimal), workspace image
 ├── run/
 │   └── create-ocp-secret.sh         ← Create OpenShift secret for credentials
 ├── scripts/
