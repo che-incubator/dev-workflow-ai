@@ -38,14 +38,11 @@
  * Requires: DATABASE_URL env var (or set in .env)
  */
 
-import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import matter from 'gray-matter';
 
 // ── CLI args ───────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
-const skipPreview = args.includes('--skip-preview');
 const dirArgIdx = args.findIndex(a => a === '--dir');
 const dirArg =
   args.find(a => a.startsWith('--dir='))?.split('=')[1] ??
@@ -70,58 +67,6 @@ if (dryRun) {
   console.log('⚠  DRY RUN — no database writes\n');
 }
 
-// ── Preview what will be imported ─────────────────────────────────────────
-async function scanForProjects(dir) {
-  const projectsDir = join(dir, 'projects');
-  let entries;
-  try {
-    entries = await readdir(projectsDir);
-  } catch {
-    console.log('No projects/ directory found in', dir);
-    return;
-  }
-
-  console.log('\n📁 Projects found in projects/:\n');
-  for (const slug of entries.sort()) {
-    const contextPath = join(projectsDir, slug, 'context.md');
-    try {
-      const raw = await readFile(contextPath, 'utf8');
-      const parsed = matter(raw);
-      const data = parsed.data;
-      const repo = data.repo ?? 'no repo defined';
-      const desc = data.description ?? '';
-      const stack = Array.isArray(data.stack) ? data.stack.join(', ') : (data.stack ?? '');
-      const issueSource = data.issue_source ?? 'no issue source';
-
-      console.log(`  ├─ ${slug}`);
-      console.log(`  │   repo:    ${repo}`);
-      if (desc) console.log(`  │   desc:    ${desc}`);
-      if (stack) console.log(`  │   stack:   ${stack}`);
-      console.log(`  │   issues:  ${issueSource}`);
-      console.log('  │');
-    } catch {
-      console.log(`  ├─ ${slug}  (no context.md — will stub)`);
-    }
-  }
-
-  // Count all .md files
-  let mdCount = 0;
-  async function count(d) {
-    const es = await readdir(d).catch(() => []);
-    for (const e of es) {
-      const f = join(d, e);
-      const s = await stat(f).catch(() => null);
-      if (!s) continue;
-      if (s.isDirectory()) await count(f);
-      else if (e.endsWith('.md')) mdCount++;
-    }
-  }
-  await count(join(dir, 'projects'));
-  await count(join(dir, 'shared')).catch(() => {});
-  await count(join(dir, 'context')).catch(() => {});
-  console.log(`  Total *.md files to import: ${mdCount}`);
-}
-
 // ── Main ───────────────────────────────────────────────────────────────────
 async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -133,8 +78,6 @@ async function main() {
     : `PGlite (${process.env.PGLITE_DATA_DIR ?? '.local/pglite'})`;
   console.log(`  Database:      ${dbLabel}`);
   console.log();
-
-  if (!skipPreview) await scanForProjects(KNOWLEDGE_DIR);
 
   if (dryRun) {
     console.log('\n⚠  Dry-run mode — exiting without DB writes.');
