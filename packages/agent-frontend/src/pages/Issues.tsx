@@ -664,12 +664,11 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
 
 type IssueView = 'all' | 'prioritized' | 'skipped';
 
-function CveBatchButton({ cveCount, activeIssueUrls }: { cveCount: number; activeIssueUrls: Set<string> }) {
+function CveBatchButton({ cveCount, activeIssueUrls, cveUrls }: { cveCount: number; activeIssueUrls: Set<string>; cveUrls: Set<string> }) {
   const { addAlert } = useAlerts();
   const [loading, setLoading] = React.useState(false);
-  const batchAlreadyRunning = cveCount > 1 && [...activeIssueUrls].some(url =>
-    /CVE-\d{4}-\d+/i.test(url) || url.includes('CVE')
-  );
+  // Batch is running if any of the CVE issue URLs is currently in an active run
+  const batchAlreadyRunning = cveCount > 1 && [...cveUrls].some(url => activeIssueUrls.has(url));
   const isDisabled = loading || cveCount <= 1 || batchAlreadyRunning;
 
   async function handleBatch(): Promise<void> {
@@ -711,14 +710,17 @@ function AllIssuesSection({
   const { addAlert } = useAlerts();
   const [view, setView] = useState<IssueView>('all');
 
-  const cveCount = useMemo(() =>
+  const cveIssues = useMemo(() =>
     issues.filter(i =>
       i.status === 'open' && (
         /CVE-\d{4}-\d+/i.test(i.title) ||
         (i.labels ?? []).some(l => l === 'Security' || l === 'security')
       )
-    ).length,
+    ),
   [issues]);
+  const cveCount = cveIssues.length;
+  // Set of CVE issue URLs to detect when a batch run is already in progress
+  const cveUrls = useMemo(() => new Set(cveIssues.map(i => i.url)), [cveIssues]);
   const [search, setSearch] = useState('');
   const [skippedIds, setSkippedIds] = useState<Set<number>>(new Set());
   const [starting, setStarting] = useState<string | null>(null);
@@ -845,7 +847,7 @@ function AllIssuesSection({
             />
               </FlexItem>
               <FlexItem>
-                <CveBatchButton cveCount={cveCount} activeIssueUrls={activeIssueUrls} />
+                <CveBatchButton cveCount={cveCount} activeIssueUrls={activeIssueUrls} cveUrls={cveUrls} />
               </FlexItem>
             </Flex>
           </FlexItem>

@@ -366,23 +366,26 @@ export const runsRoutes: FastifyPluginAsync = async app => {
   // DELETE /:threadId — cancel a running run (soft); hard-delete a finished run
   app.delete<{ Params: { threadId: string } }>('/:threadId', { schema: { tags } }, async (req, reply) => {
     const { threadId } = req.params;
-    const { rows } = await db.query<{ status: string }>(
-      'SELECT status FROM agent_runs WHERE thread_id = $1',
-      [threadId],
-    );
-    const status = rows[0]?.status;
-    if (status === 'running') {
-      // Soft cancel
-      await db.query(
-        "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
+    try {
+      const { rows } = await db.query<{ status: string }>(
+        'SELECT status FROM agent_runs WHERE thread_id = $1',
         [threadId],
       );
-      emitRunEvent(threadId, { type: 'run_failed', threadId, payload: { error: 'Cancelled by user' } });
-    } else {
-      // Hard delete finished/failed run
-      await db.query('DELETE FROM run_events WHERE thread_id = $1', [threadId]);
-      await db.query('DELETE FROM findings WHERE thread_id = $1', [threadId]);
-      await db.query('DELETE FROM agent_runs WHERE thread_id = $1', [threadId]);
+      const status = rows[0]?.status;
+      if (status === 'running') {
+        await db.query(
+          "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
+          [threadId],
+        );
+        emitRunEvent(threadId, { type: 'run_failed', threadId, payload: { error: 'Cancelled by user' } });
+      } else {
+        await db.query('DELETE FROM run_events WHERE thread_id = $1', [threadId]).catch(() => {});
+        await db.query('DELETE FROM findings WHERE thread_id = $1', [threadId]).catch(() => {});
+        await db.query('DELETE FROM agent_runs WHERE thread_id = $1', [threadId]).catch(() => {});
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return reply.status(500).send({ error: `Failed to delete run: ${msg}` });
     }
     return reply.status(204).send();
   });

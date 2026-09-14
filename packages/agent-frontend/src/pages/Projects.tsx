@@ -46,9 +46,11 @@ import {
 } from '@patternfly/react-core';
 import { CubesIcon, PencilAltIcon, PlusCircleIcon, SyncAltIcon, TrashIcon } from '@patternfly/react-icons';
 import {
+  AgentRun,
   createProject,
   deleteProject,
   getProjects,
+  getRuns,
   Project,
   updateProject,
   updateProjectRepo,
@@ -134,6 +136,7 @@ export default function Projects() {
   const [deleting, setDeleting] = useState(false);
 
   const [updatingName, setUpdatingName] = useState<string | null>(null);
+  const [runningRepos, setRunningRepos] = useState<Set<string>>(new Set());
   const { addAlert } = useAlerts();
 
   const filterRef = useRef<HTMLInputElement>(null);
@@ -143,7 +146,17 @@ export default function Projects() {
       .then(setProjects)
       .finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, []);
+  const loadRuns = () =>
+    getRuns()
+      .then(runs => setRunningRepos(new Set(runs.filter(r => r.status === 'running').map(r => r.repo).filter(Boolean))))
+      .catch(() => {});
+
+  useEffect(() => {
+    load();
+    loadRuns();
+    const id = setInterval(loadRuns, 10_000);
+    return () => clearInterval(id);
+  }, []);
 
   const filtered = useMemo(
     () =>
@@ -276,6 +289,7 @@ export default function Projects() {
           <Gallery hasGutter minWidths={{ default: '280px' }} className={styles.gallery}>
             {filtered.map(p => {
               const isUpdating = updatingName === p.name;
+              const isRepoRunning = runningRepos.has(p.repo);
               const visibleStack = (p.stack ?? []).slice(0, 3);
 
               return (
@@ -286,11 +300,11 @@ export default function Projects() {
                         actions: (
                           <ActionList isIconList>
                             <ActionListItem>
-                              <Tooltip content="Clone / pull">
+                              <Tooltip content={isRepoRunning ? 'Agent is running on this repo' : 'Clone / pull'}>
                                 <Button
                                   variant="plain"
                                   aria-label="Update repo"
-                                  isDisabled={isUpdating}
+                                  isDisabled={isUpdating || isRepoRunning}
                                   onClick={() => handleUpdate(p)}
                                 >
                                   {isUpdating ? <Spinner size="sm" /> : <SyncAltIcon />}
@@ -305,11 +319,12 @@ export default function Projects() {
                               </Tooltip>
                             </ActionListItem>
                             <ActionListItem>
-                              <Tooltip content="Delete project">
+                              <Tooltip content={isRepoRunning ? 'Agent is running on this repo' : 'Delete project'}>
                                 <Button
                                   variant="plain"
                                   aria-label="Delete project"
-                                  onClick={() => setDeleteTarget(p)}
+                                  isDisabled={isRepoRunning}
+                                  onClick={() => !isRepoRunning && setDeleteTarget(p)}
                                   className={styles.deleteBtn}
                                 >
                                   <TrashIcon />
