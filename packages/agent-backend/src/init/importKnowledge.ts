@@ -62,6 +62,11 @@ function classifyFile(rel: string): Classified | null {
     return { projectSlug: slug, name: rawName, isProjectContext: false };
   }
 
+  // shared/sources.md — special: handled separately for source seeding, also stored as context
+  if (rel === 'shared/sources.md') {
+    return { projectSlug: 'shared', name: 'sources', isProjectContext: false };
+  }
+
   // shared/rules/<name>.md
   const sharedRules = rel.match(/^shared\/rules\/([^/]+)\.md$/);
   if (sharedRules) {
@@ -140,6 +145,8 @@ export async function importKnowledge(
   // Collect all issue_source URLs defined in this knowledge directory before
   // upserting — then delete any stale DB rows that are no longer configured.
   const configuredSourceUrls = new Set<string>();
+
+  // 1. Collect per-project issue_source from subprojects/*/context.md
   for (const fp of allFiles) {
     const rel = relative(effectiveDir, fp);
     const cl = classifyFile(rel);
@@ -149,7 +156,10 @@ export async function importKnowledge(
         const parsed2 = matter(raw2);
         const src = (parsed2.data as Record<string, unknown>).issue_source;
         if (typeof src === 'string' && src) {
-          const cleanUrl = src.replace(/\/(issues|pulls)\/?$/, '').replace(/[?#].*$/, '');
+          // Only strip query/fragment from GitHub URLs; preserve Jira URLs as-is
+          const cleanUrl = src.includes('github.com')
+            ? src.replace(/\/(issues|pulls)\/?$/, '').replace(/[?#].*$/, '')
+            : src;
           configuredSourceUrls.add(cleanUrl);
         }
       } catch {
@@ -157,7 +167,26 @@ export async function importKnowledge(
       }
     }
   }
-  // Remove sources that are no longer in the sample files
+
+  // 2. Collect shared issue_sources from shared/sources.md (array of URLs)
+  const sharedSourcesFile = join(effectiveDir, 'shared', 'sources.md');
+  const sharedSourcesList: string[] = [];
+  try {
+    const sharedRaw = await readFile(sharedSourcesFile, 'utf8');
+    const sharedParsed = matter(sharedRaw);
+    const urls = (sharedParsed.data as Record<string, unknown>).issue_sources;
+    const list = Array.isArray(urls) ? (urls as unknown[]).map(String) : typeof urls === 'string' ? [urls] : [];
+    for (const u of list) {
+      if (u) {
+        configuredSourceUrls.add(u);
+        sharedSourcesList.push(u);
+      }
+    }
+  } catch {
+    /* file doesn't exist — no shared sources configured */
+  }
+
+  // Remove sources that are no longer in the knowledge files
   if (configuredSourceUrls.size > 0) {
     await db
       .query(
@@ -168,6 +197,22 @@ export async function importKnowledge(
   } else {
     // No sources defined in this import → clear all (full reset)
     await db.query('DELETE FROM issue_sources').catch(() => {});
+  }
+
+  // Upsert shared sources so they exist even before sync
+  for (const url of sharedSourcesList) {
+    const isJira = url.includes('atlassian.net') || url.includes('/jira/') || url.includes('/browse/');
+    const label = url.includes('/jira/for-you') ? 'Assigned to me'
+      : isJira ? new URL(url).hostname
+      : url.replace('https://github.com/', '');
+    const kind = isJira ? 'jira' : 'github';
+    await db.query(
+      `INSERT INTO issue_sources (url, kind, label, project_slug)
+       VALUES ($1, $2, $3, '')
+       ON CONFLICT (url) DO NOTHING`,
+      [url, kind, label],
+    ).catch(() => {});
+    sourcesRegistered++;
   }
 
   for (const fullPath of allFiles) {
