@@ -19,6 +19,7 @@ import { emitRunEvent } from '../ws/agentStream.js';
 import type { AgentRunRow, RunEventRow, FindingRow } from '../../db/schema.js';
 import type { State } from '../../agent/state.js';
 import { startRunSchema } from '../../constants/schemas.js';
+import { acquireRepoLock, resetRepoBranch } from '../../utils/repoLock.js';
 
 interface StartRunBody {
   project?: string; // optional when issueUrl is provided
@@ -125,6 +126,18 @@ export async function runAgentInBackground(
     ...extraState,
   };
 
+  // Acquire per-repo lock: only one run may work on a given local repo at a time.
+  // Other runs wait (up to 10 min) then proceed. The lock also resets the repo
+  // to the default branch so each run starts from a clean state.
+  const releaseRepoLock = repoLocal
+    ? await acquireRepoLock(repoLocal, threadId)
+    : () => {};
+
+  if (repoLocal) {
+    const defaultBranch = config?.default_branch ?? 'main';
+    resetRepoBranch(repoLocal, defaultBranch);
+  }
+
   try {
     const app = await getGraph();
     const agentConfig = { configurable: { thread_id: threadId } };
@@ -219,13 +232,14 @@ export async function runAgentInBackground(
       "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
       [threadId],
     );
-    // Store the error so it appears in the Log view
     await db.query(
       'INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)',
       [threadId, 'error', 'error', `Agent failed: ${msg}`],
     ).catch(() => {});
     emitRunEvent(threadId, { type: 'run_failed', threadId, payload: { error: msg } });
     console.error(`[run ${threadId}] Agent failed:`, err);
+  } finally {
+    releaseRepoLock();
   }
 
   // Also store "not found" errors from the early exit path

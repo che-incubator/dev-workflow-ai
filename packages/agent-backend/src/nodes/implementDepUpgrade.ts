@@ -356,7 +356,15 @@ async function implementBatchDepUpgrade(state: State): Promise<Partial<State>> {
 
   for (const issue of batchIssues) {
     const text = issue.title ?? '';
-    const parsed = parseDepUpgrade(text);
+    // Try standard "Upgrade <pkg>" parser first
+    let parsed = parseDepUpgrade(text);
+    // Fallback: Jira CVE title format "CVE-YYYY-NNNN component: package-name: description"
+    if (!parsed) {
+      const cveMatch = text.match(/CVE-[\d-]+\s+[^:]+:\s+([\w@/_-]+)(?::|$)/i);
+      if (cveMatch) {
+        parsed = { packageName: cveMatch[1].toLowerCase(), targetVersion: null };
+      }
+    }
     if (!parsed) continue;
 
     const { packageName } = parsed;

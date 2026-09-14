@@ -46,9 +46,11 @@ import { Table, Tbody, Td, Th, Thead, Tr } from '@patternfly/react-table';
 import { useAlerts } from '../contexts/AlertContext.js';
 import {
   addSource,
+  AgentRun,
   deleteIssue,
   deleteSource,
   getAllIssues,
+  getRuns,
   getSources,
   IssueSource,
   importIssue,
@@ -662,10 +664,13 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
 
 type IssueView = 'all' | 'prioritized' | 'skipped';
 
-function CveBatchButton({ cveCount }: { cveCount: number }) {
+function CveBatchButton({ cveCount, activeIssueUrls }: { cveCount: number; activeIssueUrls: Set<string> }) {
   const { addAlert } = useAlerts();
   const [loading, setLoading] = React.useState(false);
-  const isDisabled = loading || cveCount <= 1;
+  const batchAlreadyRunning = cveCount > 1 && [...activeIssueUrls].some(url =>
+    /CVE-\d{4}-\d+/i.test(url) || url.includes('CVE')
+  );
+  const isDisabled = loading || cveCount <= 1 || batchAlreadyRunning;
 
   async function handleBatch(): Promise<void> {
     setLoading(true);
@@ -685,7 +690,7 @@ function CveBatchButton({ cveCount }: { cveCount: number }) {
       variant="secondary"
       isDisabled={isDisabled}
       onClick={() => void handleBatch()}
-      title={cveCount <= 1 ? `Need ≥2 CVE issues (found ${cveCount})` : `Batch fix ${cveCount} CVE issues in one PR`}
+      title={batchAlreadyRunning ? 'A CVE batch run is already in progress' : cveCount <= 1 ? `Need ≥2 CVE issues (found ${cveCount})` : `Batch fix ${cveCount} CVE issues in one PR`}
     >
       {loading ? <><Spinner size="sm" /> Running…</> : `Batch CVE fix${cveCount > 1 ? ` (${cveCount})` : ''}`}
     </Button>
@@ -695,9 +700,13 @@ function CveBatchButton({ cveCount }: { cveCount: number }) {
 function AllIssuesSection({
   issues,
   loading,
+  activeIssueUrls,
+  onRunStarted,
 }: {
   issues: StoredIssue[];
   loading: boolean;
+  activeIssueUrls: Set<string>;
+  onRunStarted: () => void;
 }) {
   const { addAlert } = useAlerts();
   const [view, setView] = useState<IssueView>('all');
@@ -731,6 +740,7 @@ function AllIssuesSection({
     try {
       const { threadId } = await startRun({ issueUrl: issue.url, forcePriority: force });
       addAlert('success', `Run started — thread: ${threadId.slice(0, 8)}…`);
+      onRunStarted();
     } catch (e) {
       addAlert('danger', e instanceof Error ? e.message : 'Failed to start run');
     } finally {
@@ -817,7 +827,7 @@ function AllIssuesSection({
             />
               </FlexItem>
               <FlexItem>
-                <CveBatchButton cveCount={cveCount} />
+                <CveBatchButton cveCount={cveCount} activeIssueUrls={activeIssueUrls} />
               </FlexItem>
             </Flex>
           </FlexItem>
@@ -852,6 +862,7 @@ function AllIssuesSection({
               {filtered.map(issue => {
                 const key = String(issue.id);
                 const isStarting = starting === key;
+                const isRunning = activeIssueUrls.has(issue.url);
                 const shortTitle = issue.title.length > 60
                   ? `${issue.title.slice(0, 60)}…`
                   : issue.title;
@@ -886,11 +897,13 @@ function AllIssuesSection({
                       {formatOpened(issue.fetched_at)}
                     </Td>
                     <Td>
-                      {issue.priority && (
-                        <Label color={PRIORITY_COLOR[issue.priority] ?? 'grey'} isCompact>
-                          {issue.priority}
-                        </Label>
-                      )}
+                      {isRunning
+                        ? <Label color="orange" isCompact>Running</Label>
+                        : issue.priority && (
+                          <Label color={PRIORITY_COLOR[issue.priority] ?? 'grey'} isCompact>
+                            {issue.priority}
+                          </Label>
+                        )}
                     </Td>
                     <Td>{issue.story_points || '?'}</Td>
                     <Td isActionCell>
@@ -912,19 +925,19 @@ function AllIssuesSection({
                       >
                         <DropdownList>
                           <DropdownItem
-                            isDisabled={starting !== null}
+                            isDisabled={starting !== null || isRunning}
                             onClick={() => { void handleStart(issue); setOpenKebab(null); }}
                           >
-                            {isStarting ? 'Starting…' : 'Force run'}
+                            {isRunning ? 'Running…' : isStarting ? 'Starting…' : 'Force run'}
                           </DropdownItem>
-                          {view === 'prioritized' && (
+                          {view === 'prioritized' && !isRunning && (
                             <DropdownItem onClick={() => { handleSkip(issue.id); setOpenKebab(null); }}>
                               Skip
                             </DropdownItem>
                           )}
                           {view === 'skipped' && (
                             <DropdownItem
-                              isDisabled={starting !== null}
+                              isDisabled={starting !== null || isRunning}
                               onClick={() => { void handleStart(issue, true); setOpenKebab(null); }}
                             >
                               Force priority
@@ -955,39 +968,39 @@ function AllIssuesSection({
 export default function Issues() {
   const [sources, setSources] = useState<IssueSource[]>([]);
   const [issues, setIssues] = useState<StoredIssue[]>([]);
+  const [activeRuns, setActiveRuns] = useState<AgentRun[]>([]);
   const [srcLoading, setSrcLoading] = useState(true);
   const [issueLoading, setIssueLoading] = useState(true);
 
   const loadSources = useCallback(async () => {
-    try {
-      const s = await getSources();
-      setSources(s);
-    } catch {
-      /* ignore — alerts shown in sub-components */
-    } finally {
-      setSrcLoading(false);
-    }
+    try { setSources(await getSources()); } catch { /* ignore */ } finally { setSrcLoading(false); }
   }, []);
 
   const loadIssues = useCallback(async () => {
-    try {
-      const i = await getAllIssues();
-      setIssues(i);
-    } catch {
-      /* ignore */
-    } finally {
-      setIssueLoading(false);
-    }
+    try { setIssues(await getAllIssues()); } catch { /* ignore */ } finally { setIssueLoading(false); }
+  }, []);
+
+  const loadRuns = useCallback(async () => {
+    try { setActiveRuns((await getRuns()).filter(r => r.status === 'running')); } catch { /* ignore */ }
   }, []);
 
   function handleReload(): void {
     loadSources();
     loadIssues();
+    loadRuns();
   }
 
   useEffect(() => {
     handleReload();
+    // Poll running runs every 10s so buttons auto-enable when runs finish
+    const id = setInterval(loadRuns, 10_000);
+    return () => clearInterval(id);
   }, []);
+
+  const activeIssueUrls = useMemo(
+    () => new Set(activeRuns.map(r => r.issue_url).filter(Boolean)),
+    [activeRuns],
+  );
 
   return (
     <>
@@ -1004,7 +1017,7 @@ export default function Issues() {
       </PageSection>
 
       <PageSection>
-        <AllIssuesSection issues={issues} loading={issueLoading} />
+        <AllIssuesSection issues={issues} loading={issueLoading} activeIssueUrls={activeIssueUrls} onRunStarted={loadRuns} />
       </PageSection>
     </>
   );
