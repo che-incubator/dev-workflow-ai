@@ -87,51 +87,59 @@ When multiple CVE / Security issues are open, the **Batch CVE fix** button on th
 
 ## Open in Eclipse Che
 
-### Step 1 — Create the OpenShift secret (once, before opening the workspace)
+Credentials are injected into the workspace from an OpenShift Secret. The flow is:
 
-Env vars are injected into the workspace via an OpenShift Secret. Create it **before** opening the workspace — otherwise the agent starts without credentials.
-
-```bash
-# Login to your OpenShift cluster first
-oc login https://<your-ocp-api-url> -u <user> -p <password>
-
-# Create the secret (reads GITHUB_TOKEN from env, GCP SA from file)
-export GITHUB_TOKEN=ghp_...
-./run/create-ocp-secret.sh \
-  --namespace <your-workspace-namespace> \
-  --sa-file ~/gcp-sa-claude.json
+```
+.env.example → .env (fill values) → create-ocp-secret.sh → Secret → devfile.yaml workspace
 ```
 
-The script creates a Secret named `dev-workflow-ai-secrets` with these labels:
+### Step 1 — Prepare `.env`
+
+```bash
+cp .env.example .env
+# Edit .env and fill in your values
+```
+
+`.env.example` documents every variable with comments. The minimum set:
+
+```bash
+GITHUB_TOKEN=ghp_...                    # open real PRs (omit for dry-run)
+ANTHROPIC_VERTEX_PROJECT_ID=my-project  # or ANTHROPIC_API_KEY / GEMINI_API_KEY
+GOOGLE_APPLICATION_CREDENTIALS_JSON='{...json...}'
+JIRA_TOKEN=...                          # optional — Jira issue sync
+JIRA_EMAIL=you@example.com
+```
+
+### Step 2 — Create the OpenShift secret (once per namespace)
+
+Do this **before** opening the workspace. The DevWorkspace Operator reads the secret and auto-injects its keys as env vars.
+
+```bash
+oc login https://<your-ocp-api-url>
+
+# Reads credentials from env vars (loaded from .env by your shell, or set them explicitly)
+source .env
+./run/create-ocp-secret.sh --namespace <your-workspace-namespace>
+```
+
+The script creates a Secret named `dev-workflow-ai-secrets` with these labels so the DevWorkspace Operator picks it up automatically:
 
 ```yaml
 controller.devfile.io/mount-to-devworkspace: "true"
 controller.devfile.io/mount-as: env
 ```
 
-The DevWorkspace Operator reads these labels and automatically injects all Secret keys as environment variables into every DevWorkspace pod in that namespace. No changes to `devfile.yaml` needed.
+> **Important**: `devfile.yaml` intentionally does **not** list credential env vars. Any `value: ""` in the devfile would override the secret injection with an empty string. Only non-sensitive config (`PGLITE_DATA_DIR`, `KNOWLEDGE_DIR`, `OLLAMA_MODEL`) is set in the devfile.
 
-**Secret contains:**
-
-| Key | Value source |
-|---|---|
-| `GITHUB_TOKEN` | `--github-token` or `$GITHUB_TOKEN` env var |
-| `ANTHROPIC_VERTEX_PROJECT_ID` | extracted from the GCP service account JSON |
-| `GOOGLE_APPLICATION_CREDENTIALS_JSON` | full content of the SA key file |
-| `CLOUD_ML_REGION` | `us-east5` (edit in the script if different) |
-| `VERTEX_CLAUDE_MODEL` | `claude-sonnet-4-6@default` |
-
-> **Without `GITHUB_TOKEN`** the agent runs in dry-run mode — it writes the PR description and patch to `output/` instead of opening a real PR.
-
-### Step 2 — Open the workspace
+### Step 3 — Open the workspace
 
 ```
 https://<your-che-host>/f?url=https://github.com/olexii4/dev-workflow-ai
 ```
 
-Eclipse Che reads `devfile.yaml`, provisions a single container (PGlite embedded — no sidecar needed), and exposes the agent UI at port 3000. Credentials from the secret are available immediately as env vars.
+Eclipse Che reads `devfile.yaml`, provisions the container (PGlite embedded — no sidecar), and exposes the agent UI at port 3000. The secret values are available immediately.
 
-To verify the secret is mounted inside the workspace:
+Verify inside the workspace:
 
 ```bash
 echo $GITHUB_TOKEN

@@ -31,106 +31,73 @@ components:
           targetPort: 3000
           path: /swagger
       env:
-        # PGlite — embedded Postgres-in-WASM, no sidecar needed.
-        # Data directory is inside /projects/ which is PVC-backed in Eclipse Che
-        # (survives pod restarts). Remove this var to use in-memory PGlite instead.
+        # ── Non-sensitive config (safe to hardcode) ───────────────────────────
+        # PGlite: embedded Postgres-in-WASM, persisted on the PVC at /projects/
         - name: PGLITE_DATA_DIR
           value: "/projects/.data/pglite"
         - name: KNOWLEDGE_DIR
           value: "${PROJECT_SOURCE}/pg_seed/eclipse-che"
-        # LLM backend — set one of these (or configure via Settings → AI Providers)
-        - name: ANTHROPIC_VERTEX_PROJECT_ID
-          value: ""
-        - name: CLOUD_ML_REGION
-          value: ""
-        - name: VERTEX_CLAUDE_MODEL
-          value: ""
-        - name: GOOGLE_APPLICATION_CREDENTIALS_JSON
-          value: ""
-        - name: ANTHROPIC_API_KEY
-          value: ""
-        - name: GEMINI_API_KEY
-          value: ""
-        # External Ollama on your intranet — leave empty to use Vertex AI / Claude / Gemini
-        - name: OLLAMA_BASE_URL
-          value: ""
         - name: OLLAMA_MODEL
           value: "qwen2.5-coder:7b"
-        # GitHub — required for real PR creation; omit for dry-run mode
-        # Injected automatically when 'dev-workflow-ai-secrets' Secret exists:
-        #   label   controller.devfile.io/mount-to-devworkspace: "true"
-        #   annotation controller.devfile.io/mount-as: env
-        # Create the secret once with: ./run/create-ocp-secret.sh
-        - name: GITHUB_TOKEN
-          value: ""
-        # Jira — required for assigned-to-me issue sync
-        - name: JIRA_TOKEN
-          value: ""
-        - name: JIRA_EMAIL
-          value: ""
-        - name: JIRA_BASE_URL
-          value: "https://redhat.atlassian.net"
+        # ── Credentials — injected from OpenShift secret ─────────────────────
+        # All credential env vars (GITHUB_TOKEN, ANTHROPIC_*, GEMINI_API_KEY,
+        # JIRA_TOKEN, JIRA_EMAIL, JIRA_BASE_URL, GOOGLE_APPLICATION_CREDENTIALS_JSON)
+        # must NOT be listed here. Define them in the 'dev-workflow-ai-secrets'
+        # Secret and label it so the DevWorkspace Operator auto-injects them:
+        #
+        #   controller.devfile.io/mount-to-devworkspace: "true"
+        #   controller.devfile.io/mount-as: env
+        #
+        # Create the secret before opening this workspace:
+        #   cp .env.example .env  # fill in your values
+        #   ./run/create-ocp-secret.sh --namespace <ns>
+        #
+        # Any env var defined here with value: "" would OVERRIDE the secret
+        # injection and give the container an empty string instead of the
+        # secret value — that is why credentials are absent from this list.
 
 commands:
-  - id: install
+  - id: start-prepare
     exec:
-      label: "[DWA] install dependencies"
+      label: "[DWA] start:prepare — seed DB + start API (first run)"
       component: tools
       workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn install"
+      commandLine: "yarn start:prepare"
       group:
-        kind: build
+        kind: run
         isDefault: true
+
+  - id: dev
+    exec:
+      label: "[DWA] dev — start API only (PGlite, hot-reload)"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "yarn dev"
+      group:
+        kind: run
+
+  - id: start
+    exec:
+      label: "[DWA] start — frontend dev server (port 5173)"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "yarn start"
+      group:
+        kind: run
 
   - id: build
     exec:
-      label: "[DWA] build (UI + API)"
+      label: "[DWA] build — UI + API (production webpack)"
       component: tools
       workingDir: ${PROJECT_SOURCE}
-      commandLine: "./build/build.sh"
+      commandLine: "yarn build"
       group:
         kind: build
-
-  - id: build-ui
-    exec:
-      label: "[DWA] build UI only (webpack)"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "./build/build.sh --ui-only"
-      group:
-        kind: build
-
-  - id: build-api
-    exec:
-      label: "[DWA] build API only (webpack)"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "./build/build.sh --api-only"
-      group:
-        kind: build
-
-  - id: start-api
-    exec:
-      label: "[DWA] start API (dev mode, PGlite)"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn dev:api"
-      group:
-        kind: run
         isDefault: true
-
-  - id: start-ui
-    exec:
-      label: "[DWA] start UI dev server (webpack, port 5173)"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn dev:ui"
-      group:
-        kind: run
 
   - id: test
     exec:
-      label: "[DWA] run tests"
+      label: "[DWA] test"
       component: tools
       workingDir: ${PROJECT_SOURCE}
       commandLine: "yarn test"
@@ -138,50 +105,18 @@ commands:
         kind: test
         isDefault: true
 
-  - id: lint
-    exec:
-      label: "[DWA] lint"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn lint"
-      group:
-        kind: test
-
-  - id: typecheck
-    exec:
-      label: "[DWA] typecheck"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn typecheck"
-      group:
-        kind: test
-
   - id: run-issue
     exec:
-      label: "[DWA] run agent on issue (direct)"
+      label: "[DWA] run-issue — run agent directly on an issue URL"
       component: tools
       workingDir: ${PROJECT_SOURCE}
-      commandLine: "echo 'Usage: npx tsx scripts/run-issue-direct.ts <github-issue-url>'"
+      commandLine: "yarn run-issue"
       group:
         kind: run
 
-  - id: install-claude-code
-    exec:
-      label: "[DWA] install Claude Code CLI"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "npm install -g @anthropic-ai/claude-code"
-
-  - id: install-gemini-cli
-    exec:
-      label: "[DWA] install Gemini CLI"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "npm install -g @google/gemini-cli"
-
   - id: license-generate
     exec:
-      label: "[DWA] generate license files"
+      label: "[DWA] license:generate"
       component: tools
       workingDir: ${PROJECT_SOURCE}
       commandLine: "yarn license:generate"
