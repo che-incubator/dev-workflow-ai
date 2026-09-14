@@ -15,13 +15,11 @@
     ]
   },
   "scripts": {
-    "build": "yarn workspaces foreach -A run build",
-    "build:all": "yarn workspaces foreach -A run build",
-    "dev:api": "bash scripts/dev-api.sh",
+    "dev": "bash scripts/dev-api.sh",
+    "dev:prepare": "yarn tsx scripts/init-db.ts",
     "dev:ui": "yarn workspace @dev-workflow-ai/agent-frontend dev",
-    "run-issue": "tsx scripts/run-issue-direct.ts",
-    "init-db": "tsx scripts/init-db.ts",
-    "init-db:dry": "tsx scripts/init-db.ts --dry-run",
+    "build": "yarn workspaces foreach -A run build",
+    "run-issue": "yarn tsx scripts/run-issue-direct.ts",
     "test": "vitest run",
     "lint:check": "yarn workspaces foreach -A run lint:check",
     "lint:fix": "yarn workspaces foreach -A run lint:fix",
