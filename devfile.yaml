@@ -30,30 +30,12 @@ components:
           targetPort: 3000
           path: /swagger
       env:
-        # ── Non-sensitive config (safe to hardcode) ───────────────────────────
-        # PGlite: embedded Postgres-in-WASM, persisted on the PVC at /projects/
         - name: PGLITE_DATA_DIR
           value: "/projects/.data/pglite"
         - name: KNOWLEDGE_DIR
           value: "${PROJECT_SOURCE}/pg_seed/eclipse-che"
         - name: OLLAMA_MODEL
           value: "qwen2.5-coder:7b"
-        # ── Credentials — injected from OpenShift secret ─────────────────────
-        # All credential env vars (GITHUB_TOKEN, ANTHROPIC_*, GEMINI_API_KEY,
-        # JIRA_TOKEN, JIRA_EMAIL, JIRA_BASE_URL, GOOGLE_APPLICATION_CREDENTIALS_JSON)
-        # must NOT be listed here. Define them in the 'dev-workflow-ai-secrets'
-        # Secret and label it so the DevWorkspace Operator auto-injects them:
-        #
-        #   controller.devfile.io/mount-to-devworkspace: "true"
-        #   controller.devfile.io/mount-as: env
-        #
-        # Create the secret before opening this workspace:
-        #   cp .env.example .env  # fill in your values
-        #   ./run/create-ocp-secret.sh --namespace <ns>
-        #
-        # Any env var defined here with value: "" would OVERRIDE the secret
-        # injection and give the container an empty string instead of the
-        # secret value — that is why credentials are absent from this list.
 
 commands:
   - id: start-prepare
