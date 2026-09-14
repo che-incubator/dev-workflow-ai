@@ -60,16 +60,6 @@ if (dryRun) {
   console.log('⚠  DRY RUN — no database writes\n');
 }
 
-// ── Validate DB ────────────────────────────────────────────────────────────
-if (!process.env.DATABASE_URL) {
-  console.error('✗  DATABASE_URL is not set.');
-  console.error('   Add it to .env or export it before running.');
-  console.error(
-    '   Example: export DATABASE_URL=postgres://agent:agent@localhost:5433/devworkflow',
-  );
-  process.exit(1);
-}
-
 // ── Preview what will be imported ─────────────────────────────────────────
 async function scanForProjects(dir) {
   const projectsDir = join(dir, 'projects');
@@ -128,7 +118,10 @@ async function main() {
   console.log('  dev-workflow-ai — database initialisation');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  Knowledge dir: ${KNOWLEDGE_DIR}`);
-  console.log(`  Database:      ${process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@')}`);
+  const dbLabel = process.env.DATABASE_URL
+    ? process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@')
+    : `PGlite (${process.env.PGLITE_DATA_DIR ?? '.local/pglite'})`;
+  console.log(`  Database:      ${dbLabel}`);
   console.log();
 
   if (!skipPreview) await scanForProjects(KNOWLEDGE_DIR);
