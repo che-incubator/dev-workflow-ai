@@ -52,8 +52,18 @@ const dirArg =
   (dirArgIdx !== -1 ? args[dirArgIdx + 1] : undefined);
 
 const ROOT = resolve(process.cwd());
-// Priority: --dir arg > KNOWLEDGE_DIR env var > project root
-const KNOWLEDGE_DIR = dirArg ? resolve(dirArg) : (process.env.KNOWLEDGE_DIR ?? ROOT);
+
+// Resolve DevWorkspace predefined variables that the operator may leave unsubstituted
+// in env var values (e.g. KNOWLEDGE_DIR="${PROJECT_SOURCE}/pg_seed/eclipse-che").
+function resolveDevWorkspaceVars(value) {
+  return value
+    .replace(/\$\{PROJECT_SOURCE\}/g, process.env.PROJECT_SOURCE ?? ROOT)
+    .replace(/\$\{PROJECTS_ROOT\}/g, process.env.PROJECTS_ROOT ?? '/projects');
+}
+
+// Priority: --dir arg > KNOWLEDGE_DIR env var > <repo-root>/pg_seed/eclipse-che
+const rawKnowledgeDir = process.env.KNOWLEDGE_DIR ?? join(ROOT, 'pg_seed/eclipse-che');
+const KNOWLEDGE_DIR = dirArg ? resolve(dirArg) : resolve(resolveDevWorkspaceVars(rawKnowledgeDir));
 process.env.KNOWLEDGE_DIR = KNOWLEDGE_DIR;
 
 if (dryRun) {
