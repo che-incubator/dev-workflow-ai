@@ -21,6 +21,10 @@ import type { State } from '../../agent/state.js';
 import { startRunSchema } from '../../constants/schemas.js';
 import { acquireRepoLock, resetRepoBranch } from '../../utils/repoLock.js';
 
+// In-process registry of AbortControllers for running agent tasks.
+// Allows the DELETE endpoint to signal cancellation to the running graph.
+const runningJobs = new Map<string, AbortController>();
+
 interface StartRunBody {
   project?: string; // optional when issueUrl is provided
   issueNumber?: number;
@@ -138,11 +142,18 @@ export async function runAgentInBackground(
     resetRepoBranch(repoLocal, defaultBranch);
   }
 
+  const controller = new AbortController();
+  runningJobs.set(threadId, controller);
+
   try {
     const app = await getGraph();
-    const agentConfig = { configurable: { thread_id: threadId } };
+    const agentConfig = {
+      configurable: { thread_id: threadId },
+      signal: controller.signal,
+    };
 
     for await (const chunk of await app.stream(initialState, agentConfig)) {
+      if (controller.signal.aborted) break;
       const nodeNames = Object.keys(chunk as Record<string, unknown>);
       for (const nodeName of nodeNames) {
         const nodeOutput = (chunk as Record<string, unknown>)[nodeName] as Partial<State>;
@@ -221,24 +232,35 @@ export async function runAgentInBackground(
       }
     }
 
-    await db.query(
-      "UPDATE agent_runs SET status = 'done', finished_at = now() WHERE thread_id = $1",
-      [threadId],
-    );
-    emitRunEvent(threadId, { type: 'run_complete', threadId, payload: { status: 'done' } });
+    if (controller.signal.aborted) {
+      // Cancelled by user — status already set to 'failed' by DELETE handler
+      console.log(`[run ${threadId}] Cancelled by user`);
+    } else {
+      await db.query(
+        "UPDATE agent_runs SET status = 'done', finished_at = now() WHERE thread_id = $1",
+        [threadId],
+      );
+      emitRunEvent(threadId, { type: 'run_complete', threadId, payload: { status: 'done' } });
+    }
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await db.query(
-      "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
-      [threadId],
-    );
-    await db.query(
-      'INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)',
-      [threadId, 'error', 'error', `Agent failed: ${msg}`],
-    ).catch(() => {});
-    emitRunEvent(threadId, { type: 'run_failed', threadId, payload: { error: msg } });
-    console.error(`[run ${threadId}] Agent failed:`, err);
+    if (controller.signal.aborted) {
+      // AbortError thrown by LangGraph when signal fires — not a real error
+      console.log(`[run ${threadId}] Cancelled (abort signal)`);
+    } else {
+      const msg = err instanceof Error ? err.message : String(err);
+      await db.query(
+        "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
+        [threadId],
+      );
+      await db.query(
+        'INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)',
+        [threadId, 'error', 'error', `Agent failed: ${msg}`],
+      ).catch(() => {});
+      emitRunEvent(threadId, { type: 'run_failed', threadId, payload: { error: msg } });
+      console.error(`[run ${threadId}] Agent failed:`, err);
+    }
   } finally {
+    runningJobs.delete(threadId);
     releaseRepoLock();
   }
 
@@ -373,10 +395,17 @@ export const runsRoutes: FastifyPluginAsync = async app => {
       );
       const status = rows[0]?.status;
       if (status === 'running') {
+        // Update DB first so the graph loop sees 'failed' if it checks
         await db.query(
           "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
           [threadId],
         );
+        // Signal the running AbortController so the for-await loop exits
+        const ctrl = runningJobs.get(threadId);
+        if (ctrl) {
+          ctrl.abort();
+          runningJobs.delete(threadId);
+        }
         emitRunEvent(threadId, { type: 'run_failed', threadId, payload: { error: 'Cancelled by user' } });
       } else {
         await db.query('DELETE FROM run_events WHERE thread_id = $1', [threadId]).catch(() => {});
