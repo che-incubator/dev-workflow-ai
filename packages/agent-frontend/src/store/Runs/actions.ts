@@ -37,6 +37,14 @@ export const cancelRun = createAsyncThunk<void, string, { rejectValue: string }>
   },
 );
 
+export const deleteRun = createAsyncThunk<void, string, { rejectValue: string }>(
+  'runs/deleteRun',
+  async (threadId, { rejectWithValue }) => {
+    try { await runsService.cancelRun(threadId); }
+    catch (e) { return rejectWithValue(e instanceof Error ? e.message : 'Failed to delete run'); }
+  },
+);
+
 export const startRun = createAsyncThunk<
   { threadId: string },
   Parameters<typeof runsService.startRun>[0],

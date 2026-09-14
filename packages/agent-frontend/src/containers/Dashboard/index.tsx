@@ -6,7 +6,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { fetchRuns, cancelRun, selectRuns, selectRunsLoading } from '@/store/Runs';
+import { fetchRuns, cancelRun, deleteRun, selectRuns, selectRunsLoading } from '@/store/Runs';
 import DashboardPage from '@/pages/Dashboard';
 
 export default function DashboardContainer(): React.ReactElement {
@@ -28,7 +28,7 @@ export default function DashboardContainer(): React.ReactElement {
       loading={loading}
       onNavigate={navigate}
       onCancelRun={(threadId: string) => dispatch(cancelRun(threadId))}
-      onDeleteRun={(threadId: string) => dispatch(cancelRun(threadId))}
+      onDeleteRun={(threadId: string) => dispatch(deleteRun(threadId))}
     />
   );
 }

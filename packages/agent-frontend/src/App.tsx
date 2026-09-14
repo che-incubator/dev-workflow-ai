@@ -56,7 +56,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AlertProvider } from '@/contexts/AlertContext';
 
 const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Runtime' },
+  { to: '/runtime', label: 'Runtime' },
   { to: '/issues', label: 'Issues' },
   { to: '/projects', label: 'Subprojects' },
   { to: '/settings', label: 'Settings' },
@@ -69,8 +69,8 @@ function AppNav() {
       <NavList>
         {NAV_ITEMS.map(item => {
           const isActive =
-            item.to === '/dashboard'
-              ? location.pathname === '/' || location.pathname.startsWith('/dashboard')
+            item.to === '/runtime'
+              ? location.pathname === '/' || location.pathname.startsWith('/runtime') || location.pathname.startsWith('/dashboard')
               : location.pathname.startsWith(item.to);
           const navId = `nav-item-${item.label.toLowerCase().replace(/\s+/g, '-')}`;
           return (
@@ -214,8 +214,9 @@ function AppShell() {
       >
         <WsBanner />
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<DashboardContainer />} />
+          <Route path="/" element={<Navigate to="/runtime" replace />} />
+          <Route path="/runtime" element={<DashboardContainer />} />
+          <Route path="/dashboard" element={<Navigate to="/runtime" replace />} />
           <Route path="/issues" element={<Issues />} />
           <Route path="/projects" element={<ProjectsContainer />} />
           <Route path="/settings" element={<Settings />} />

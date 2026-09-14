@@ -724,6 +724,13 @@ function AllIssuesSection({
   const [starting, setStarting] = useState<string | null>(null);
   const [openKebab, setOpenKebab] = useState<number | null>(null);
   const [localIssues, setLocalIssues] = useState<StoredIssue[]>(issues);
+  const [sortCol, setSortCol] = useState<number | undefined>(undefined);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const COL_OPENED = 2;
+  const COL_PRIORITY = 4;
+  const COL_SP = 5;
+  const PRIORITY_ORDER: Record<string, number> = { critical: 0, major: 1, minor: 2, trivial: 3 };
 
   React.useEffect(() => { setLocalIssues(issues); }, [issues]);
 
@@ -731,8 +738,19 @@ function AllIssuesSection({
     let list = localIssues.filter(i => issueMatches(i, search));
     if (view === 'prioritized') list = list.filter(i => isPrioritized(i) && !skippedIds.has(i.id));
     if (view === 'skipped') list = list.filter(i => !isPrioritized(i) || skippedIds.has(i.id));
+    if (sortCol !== undefined) {
+      list = [...list].sort((a, b) => {
+        let cmp = 0;
+        if (sortCol === COL_OPENED) cmp = new Date(a.fetched_at).getTime() - new Date(b.fetched_at).getTime();
+        if (sortCol === COL_PRIORITY) cmp = (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
+        if (sortCol === COL_SP) cmp = (a.story_points || 0) - (b.story_points || 0);
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
     return list;
-  }, [localIssues, search, view, skippedIds]);
+  }, [localIssues, search, view, skippedIds, sortCol, sortDir]);
+
+  const sortBy = sortCol !== undefined ? { index: sortCol, direction: sortDir } : {};
 
   async function handleStart(issue: StoredIssue, force?: boolean): Promise<void> {
     const key = String(issue.id);
@@ -852,9 +870,10 @@ function AllIssuesSection({
               <Tr>
                 <Th>ID</Th>
                 <Th>Title</Th>
-                <Th>Opened</Th>
-                <Th>Priority</Th>
-                <Th>SP</Th>
+                <Th sort={{ sortBy, columnIndex: COL_OPENED, onSort: (_e, col, dir) => { setSortCol(col); setSortDir(dir); } }} style={{ cursor: 'pointer' }}>Opened</Th>
+                <Th>Labels</Th>
+                <Th sort={{ sortBy, columnIndex: COL_PRIORITY, onSort: (_e, col, dir) => { setSortCol(col); setSortDir(dir); } }} style={{ cursor: 'pointer' }}>Priority</Th>
+                <Th sort={{ sortBy, columnIndex: COL_SP, onSort: (_e, col, dir) => { setSortCol(col); setSortDir(dir); } }} style={{ cursor: 'pointer' }}>SP</Th>
                 <Th screenReaderText="Actions" />
               </Tr>
             </Thead>
@@ -885,16 +904,16 @@ function AllIssuesSection({
                       >
                         <div style={{ cursor: 'default' }}>{shortTitle}</div>
                       </Tooltip>
-                      <Flex gap={{ default: 'gapXs' }} style={{ marginTop: '4px' }}>
-                        {issue.labels.slice(0, 3).map(l => (
-                          <FlexItem key={l}>
-                            <Label isCompact>{l}</Label>
-                          </FlexItem>
-                        ))}
-                      </Flex>
                     </Td>
                     <Td style={{ whiteSpace: 'nowrap', color: 'var(--pf-t--global--text--color--subtle)', fontSize: '0.85rem' }}>
                       {formatOpened(issue.fetched_at)}
+                    </Td>
+                    <Td>
+                      <Flex gap={{ default: 'gapXs' }}>
+                        {issue.labels.slice(0, 3).map(l => (
+                          <FlexItem key={l}><Label isCompact>{l}</Label></FlexItem>
+                        ))}
+                      </Flex>
                     </Td>
                     <Td>
                       {isRunning
