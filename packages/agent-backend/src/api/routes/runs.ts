@@ -460,7 +460,7 @@ export const runsRoutes: FastifyPluginAsync = async app => {
             OR 'security' = ANY(si.labels)
           )
         ORDER BY si.score DESC
-        LIMIT 9`,
+        LIMIT 15`,
     );
 
     if (cveRows.length === 0) {
