@@ -33,6 +33,15 @@ export async function buildServer() {
     loggerInstance: logger,
   });
 
+  // Override the default JSON parser to allow Content-Type: application/json
+  // with an empty body (browsers send this on DELETE requests — Fastify rejects
+  // it by default with FST_ERR_CTP_EMPTY_JSON_BODY).
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
+    if (!body || (body as Buffer).length === 0) { done(null, null); return; }
+    try { done(null, JSON.parse((body as Buffer).toString())); }
+    catch (e) { done(e as Error, undefined); }
+  });
+
   await app.register(cookiePlugin, {
     secret: process.env.SESSION_SECRET ?? 'dev-secret-change-me',
   });
