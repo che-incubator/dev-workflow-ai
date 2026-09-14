@@ -105,6 +105,28 @@ export default [
     },
   },
 
+  // Plain JS scripts (Node.js, ESM)
+  {
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      sourceType: 'module',
+      ecmaVersion: 2022,
+      globals: {
+        ...globals.node,
+        ...globals.nodeBuiltin,
+      },
+    },
+    plugins: {
+      notice: noticePlugin,
+      prettier: prettierPlugin,
+    },
+    rules: {
+      ...COMMON_RULES,
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
   // React UI (browser environment)
   {
     files: ['packages/agent-frontend/src/**/*.ts', 'packages/agent-frontend/src/**/*.tsx'],
