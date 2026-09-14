@@ -19,7 +19,6 @@
     "build:all": "yarn workspaces foreach -A run build",
     "dev:api": "bash scripts/dev-api.sh",
     "dev:ui": "yarn workspace @dev-workflow-ai/agent-frontend dev",
-    "dev": "scripts/dev-local.sh",
     "run-issue": "tsx scripts/run-issue-direct.ts",
     "init-db": "tsx scripts/init-db.ts",
     "init-db:dry": "tsx scripts/init-db.ts --dry-run",
