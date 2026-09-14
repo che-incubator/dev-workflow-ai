@@ -16,8 +16,8 @@
   },
   "scripts": {
     "dev": "bash scripts/dev-api.sh",
-    "dev:prepare": "yarn tsx scripts/init-db.ts",
-    "dev:ui": "yarn workspace @dev-workflow-ai/agent-frontend dev",
+    "start:prepare": "yarn tsx scripts/init-db.ts && bash scripts/dev-api.sh",
+    "start": "yarn workspace @dev-workflow-ai/agent-frontend dev",
     "build": "yarn workspaces foreach -A run build",
     "run-issue": "yarn tsx scripts/run-issue-direct.ts",
     "test": "vitest run",

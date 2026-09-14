@@ -18,11 +18,8 @@ yarn install
 export ANTHROPIC_API_KEY=sk-ant-...   # or GEMINI_API_KEY / ANTHROPIC_VERTEX_PROJECT_ID
 export GITHUB_TOKEN=ghp_...           # required to open real PRs
 
-# 3. Prepare the database (seeds Eclipse Che knowledge pack)
-yarn dev:prepare
-
-# 4. Start
-yarn dev
+# 3. Prepare and start (seeds DB + starts API in one step)
+yarn start:prepare
 ```
 
 Open **http://localhost:3000** — the agent UI is ready.
@@ -146,11 +143,11 @@ echo $ANTHROPIC_VERTEX_PROJECT_ID
 ## Development
 
 ```bash
-yarn dev:prepare   # seed DB from pg_seed/
-yarn dev           # start API (tsx hot-reload, PGlite)
-yarn dev:ui        # start webpack frontend dev server (port 5173)
-yarn test          # run all tests
-yarn build         # production build
+yarn start:prepare   # seed DB from pg_seed/ + start API (combined first-run)
+yarn dev             # start API only (PGlite, tsx hot-reload)
+yarn start           # start webpack frontend dev server (port 5173)
+yarn test            # run all tests
+yarn build           # production build
 ```
 
 API docs: **http://localhost:3000/swagger**

@@ -50,11 +50,11 @@ dev-workflow-ai/
 ## Dev Commands
 
 ```bash
-yarn dev:prepare   # seed DB from pg_seed/eclipse-che/
-yarn dev           # start API (tsx, PGlite, port 3000)
-yarn dev:ui        # webpack frontend dev server (port 5173)
-yarn test          # vitest
-yarn build         # production webpack build (UI + API)
+yarn start:prepare   # seed DB from pg_seed/eclipse-che/ + start API (first run)
+yarn dev             # start API only (tsx, PGlite, port 3000)
+yarn start           # webpack frontend dev server (port 5173)
+yarn test            # vitest
+yarn build           # production webpack build (UI + API)
 ```
 
 API docs: http://localhost:3000/swagger
