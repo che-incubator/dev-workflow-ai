@@ -16,10 +16,10 @@
   },
   "scripts": {
     "dev": "bash scripts/dev-api.sh",
-    "start:prepare": "node --env-file-if-exists=.env scripts/init-db.js && bash scripts/dev-api.sh",
+    "start:prepare": "node --env-file-if-exists=.env --import=tsx/esm scripts/init-db.js && bash scripts/dev-api.sh",
     "start": "yarn workspace @dev-workflow-ai/agent-frontend dev",
     "build": "yarn workspaces foreach -A run build",
-    "run-issue": "node --env-file-if-exists=.env scripts/run-issue-direct.js",
+    "run-issue": "node --env-file-if-exists=.env --import=tsx/esm scripts/run-issue-direct.js",
     "test": "vitest run",
     "lint:check": "yarn workspaces foreach -A run lint:check",
     "lint:fix": "yarn workspaces foreach -A run lint:fix",
