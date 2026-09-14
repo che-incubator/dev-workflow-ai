@@ -84,8 +84,10 @@ After completing, respond with JSON only:
   }
 
   return {
-    reviewFindings: [], // clear findings — next review will re-check from scratch
+    // reviewFindings uses concat reducer so [] is a no-op; routing uses reviewVerdict (replace reducer)
+    reviewVerdict: '',  // reset so routeAfterReview re-evaluates after next review
     filesChanged,
+    retryCount: (state.retryCount ?? 0) + 1,
     messages: [
       `fix_feedback: applied ${state.reviewFindings.filter(f => f.severity === 'blocking').length} blocking fixes`,
     ],

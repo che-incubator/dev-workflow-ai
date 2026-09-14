@@ -64,11 +64,21 @@ function routeAfterImplement(state: State): 'implement' | 'review' | typeof END 
   return 'implement';
 }
 
+const MAX_FIX_ROUNDS = 3;
+
 function routeAfterReview(state: State): 'fix_feedback' | 'open_pr' | typeof END {
-  const blocking = state.reviewFindings.filter(f => f.severity === 'blocking');
-  if (blocking.length > 0) return 'fix_feedback';
-  // No blocking issues — open the PR
-  return 'open_pr';
+  // reviewVerdict uses a REPLACE reducer (not concat) — it always reflects
+  // the LATEST review result. reviewFindings accumulates across rounds so
+  // cannot be used for routing without false positives from prior rounds.
+  if (state.reviewVerdict === 'approve') return 'open_pr';
+
+  // Still blocking — but cap fix rounds to avoid infinite loops
+  if (state.retryCount >= MAX_FIX_ROUNDS) {
+    console.warn(`[review] Reached max fix rounds (${MAX_FIX_ROUNDS}) — opening PR anyway`);
+    return 'open_pr';
+  }
+
+  return 'fix_feedback';
 }
 
 // ── Build and compile ───────────────────────────────────────────────────────
@@ -132,7 +142,7 @@ export async function buildGraph(databaseUrl?: string) {
     .addEdge('fix_feedback', 'review')
     .addEdge('open_pr', END);
 
-  return graph.compile({ checkpointer });
+  return graph.compile({ checkpointer, recursionLimit: 50 });
 }
 
 /** Cached singleton — reuse across API requests */
