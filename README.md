@@ -90,48 +90,27 @@ When multiple CVE / Security issues are open, the **Batch CVE fix** button on th
 Credentials are injected into the workspace from an OpenShift Secret. The flow is:
 
 ```
-.env.example → .env (fill values) → create-ocp-secret.sh → Secret → devfile.yaml workspace
-```
-
-### Step 1 — Prepare `.env`
-
-```bash
-cp .env.example .env
-# Edit .env and fill in your values
-```
-
-`.env.example` documents every variable with comments. The minimum set:
-
-```bash
-GITHUB_TOKEN=ghp_...                    # open real PRs (omit for dry-run)
-ANTHROPIC_VERTEX_PROJECT_ID=my-project  # or ANTHROPIC_API_KEY / GEMINI_API_KEY
-GOOGLE_APPLICATION_CREDENTIALS_JSON='{...json...}'
-JIRA_TOKEN=...                          # optional — Jira issue sync
-JIRA_EMAIL=you@example.com
-```
-
-### Step 2 — Create the OpenShift secret (once per namespace)
-
-Do this **before** opening the workspace. The DevWorkspace Operator reads the secret and auto-injects its keys as env vars.
-
-```bash
-oc login https://<your-ocp-api-url>
-
-# Reads credentials from env vars (loaded from .env by your shell, or set them explicitly)
-source .env
-./run/create-ocp-secret.sh --namespace <your-workspace-namespace>
-```
-
-The script creates a Secret named `dev-workflow-ai-secrets` with these labels so the DevWorkspace Operator picks it up automatically:
-
-```yaml
-controller.devfile.io/mount-to-devworkspace: "true"
-controller.devfile.io/mount-as: env
+credentials → oc apply Secret → DevWorkspace Operator auto-injects as env vars
 ```
 
 > **Important**: `devfile.yaml` intentionally does **not** list credential env vars. Any `value: ""` in the devfile would override the secret injection with an empty string. Only non-sensitive config (`PGLITE_DATA_DIR`, `KNOWLEDGE_DIR`, `OLLAMA_MODEL`) is set in the devfile.
 
-### Alternative — inject individual secrets via `oc apply`
+### Step 1 — Log in to the cluster
+
+```bash
+oc login https://<your-ocp-api-url>
+```
+
+### Step 2 — Create secrets (once per namespace)
+
+Create one secret per credential. Each secret needs these labels so the DevWorkspace Operator mounts it as env vars automatically:
+
+```bash
+# Encode your value first:
+echo -n 'your-actual-value' | base64
+```
+
+### Inject individual secrets via `oc apply`
 
 Instead of the script, you can create one secret per credential manually. Each secret needs these labels so the DevWorkspace Operator mounts it as env vars:
 

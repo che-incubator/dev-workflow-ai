@@ -35,7 +35,8 @@ dev-workflow-ai/
 │   └── subprojects/<name>/          ← Per-project context, rules, skills
 │       └── che-dashboard/           ← context.md, rules/dev.md, skills/fix-cve-dep, …
 ├── run/
-│   └── create-ocp-secret.sh         ← Create OpenShift secret for credentials
+│   ├── deploy-ocp.sh                ← Deploy to OpenShift using the pre-built image
+│   └── run-local-podman.sh          ← Run locally with Podman (pulls pre-built image)
 ├── scripts/
 │   ├── dev-api.sh                   ← Start API (PGlite, hot-reload)
 │   ├── init-db.ts                   ← Seed DB from pg_seed/
@@ -59,12 +60,25 @@ API docs: http://localhost:3000/swagger
 ## Eclipse Che Deployment
 
 ```bash
-# 1. Create secret before opening the workspace
+# 1. Create credentials secret before opening the workspace (once per namespace)
 oc login ...
-./run/create-ocp-secret.sh --namespace <ns> --sa-file ~/gcp-sa.json
+oc apply -f - <<EOF
+kind: Secret
+apiVersion: v1
+metadata:
+  name: github-token
+  labels:
+    controller.devfile.io/mount-to-devworkspace: 'true'
+    controller.devfile.io/watch-secret: 'true'
+  annotations:
+    controller.devfile.io/mount-as: env
+data:
+  GITHUB_TOKEN: <base64-encoded-value>   # echo -n 'ghp_...' | base64
+type: Opaque
+EOF
 
 # 2. Open factory URL
-https://<che-host>/f?url=https://github.com/olexii4/dev-workflow-ai
+https://<che-host>/f?url=https://github.com/che-incubator/dev-workflow-ai
 ```
 
 The DevWorkspace Operator injects secret keys as env vars automatically via:
