@@ -73,9 +73,46 @@ Apply **after** base score + priority boosts. See `issue-description-quality.md`
 
 ---
 
+## Auto-Approve Threshold
+
+Only auto-start implementation (no manual confirmation) for issues at or above the minimum priority:
+
+- **Default:** `major`
+- Override per project in `projects.json` → `auto_approve.min_priority`
+- Priority order (highest → lowest): `critical` → `major` → `minor` → `trivial`
+- Issues below the threshold require manual approval via the Issues UI
+
+### GitHub label → priority mapping
+
+| GitHub label | Priority |
+|---|---|
+| `priority/critical`, `priority/blocker` | critical |
+| `priority/major` | major |
+| `priority/minor` | minor |
+| `priority/trivial` | trivial |
+
+### Jira priority → priority mapping
+
+| Jira priority | Priority |
+|---|---|
+| Critical, Blocker | critical |
+| Major | major |
+| Normal, Minor | minor |
+| Trivial | trivial |
+
+---
+
+## Global Rules
+
+- Commit trailers: `Assisted-by` only. Never `Made-with` or `Co-authored-by`.
+- Forbidden labels (always skip): `wontfix`, `duplicate`, `stale`, `lifecycle/stale`, `needs-triage`, `blocked`
+- Issue must be in state `open`
+
+---
+
 ## Project-Specific Label Filters
 
-Only fetch issues with these labels (from `rules.json` per project):
+See `projects.json` per project for `issue_labels_filter` and `exclude_labels`.
 
 | Project | Fetch labels |
 |---|---|
@@ -91,7 +128,7 @@ Only fetch issues with these labels (from `rules.json` per project):
 
 After scoring, further filter to issues whose story-point estimate is ≤ budget:
 
-- Default budget: **3 story points** (from `rules.json` → `global.story_point_budget_per_session`)
+- Default budget: **3 story points**
 - Apply `assign-story-points` skill to each candidate before final selection
 
 ---

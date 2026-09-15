@@ -1,6 +1,6 @@
 ---
 name: pick-issue
-description: Select the next issue to work on from the filtered + scored list, respecting the story-point budget from rules.json. Assigns the issue and marks it in-progress.
+description: Select the next issue to work on from the filtered + scored list, respecting the story-point budget from pg_seed/eclipse-che/projects.json. Assigns the issue and marks it in-progress.
 argument-hint: "[project-name] (e.g., che-dashboard)"
 ---
 
@@ -8,7 +8,7 @@ argument-hint: "[project-name] (e.g., che-dashboard)"
 
 ## Required input
 
-A project name matching a key in `rules.json` → `projects`. If `$ARGUMENTS` is empty, ask the user.
+A project name matching a key in `pg_seed/eclipse-che/projects.json` → `projects`. If `$ARGUMENTS` is empty, ask the user.
 
 ## CVE Priority Override
 
@@ -34,7 +34,7 @@ This produces a scored, ranked list of eligible open issues.
 ### 2. Check story-point budget
 
 ```bash
-cat ./rules.json | \
+cat ./pg_seed/eclipse-che/projects.json | \
   python3 -c "import json,sys; d=json.load(sys.stdin); print(d['global']['story_point_budget_per_session'])"
 ```
 
@@ -62,7 +62,7 @@ If multiple issues tie on score, prefer:
 ### 5. Assign and label
 
 ```bash
-REPO=<from rules.json for the project>
+REPO=<from pg_seed/eclipse-che/projects.json for the project>
 ISSUE_NUM=<selected issue number>
 
 # Assign to self

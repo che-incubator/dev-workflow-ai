@@ -1,6 +1,6 @@
 ---
 name: filter-issues
-description: Fetch open GitHub issues for a subproject, apply rules.json filters and scoring, and return a ranked list ready for pick-issue. Use before pick-issue or run-loop.
+description: Fetch open GitHub issues for a subproject, apply pg_seed/eclipse-che/projects.json filters and scoring, and return a ranked list ready for pick-issue. Use before pick-issue or run-loop.
 argument-hint: "[project-name] (e.g., che-dashboard, che-server, devworkspace-operator)"
 ---
 
@@ -8,14 +8,14 @@ argument-hint: "[project-name] (e.g., che-dashboard, che-server, devworkspace-op
 
 ## Required input
 
-A project name matching a key in `rules.json` → `projects`. If `$ARGUMENTS` is empty, ask the user.
+A project name matching a key in `pg_seed/eclipse-che/projects.json` → `projects`. If `$ARGUMENTS` is empty, ask the user.
 
 ## Workflow
 
-### 1. Read project config from rules.json
+### 1. Read project config from pg_seed/eclipse-che/projects.json
 
 ```bash
-cat ./rules.json | \
+cat ./pg_seed/eclipse-che/projects.json | \
   python3 -c "import json,sys; d=json.load(sys.stdin); p=d['projects']['$ARGUMENTS']; print(json.dumps(p, indent=2))"
 ```
 
@@ -24,7 +24,7 @@ Extract: `repo`, `issue_labels_filter`, `exclude_labels` (if present).
 ### 2. Fetch open issues
 
 ```bash
-REPO=<from rules.json>
+REPO=<from pg_seed/eclipse-che/projects.json>
 LABELS=<comma-separated from issue_labels_filter>
 
 gh issue list \
@@ -44,7 +44,7 @@ From `shared/rules/issue-filtering.md`:
 Remove issues where:
 - `assignees` is non-empty
 - Any label matches: `wontfix`, `duplicate`, `stale`, `lifecycle/stale`, `needs-triage`, `blocked`
-- Any label matches the project's `exclude_labels` list from rules.json
+- Any label matches the project's `exclude_labels` list from pg_seed/eclipse-che/projects.json
 - Title starts with "Question:" or "How to"
 - Body contains "Tracking issue" or "Epic:"
 

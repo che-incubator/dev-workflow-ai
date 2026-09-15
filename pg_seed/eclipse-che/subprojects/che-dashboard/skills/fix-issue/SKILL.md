@@ -17,7 +17,7 @@ An issue number. `analyze-issue` must have been run first — scope, affected fi
 Confirm from the analyze-issue output:
 - Affected files are listed
 - Root cause hypothesis is stated
-- Story points ≤ session budget (check `rules.json` → `global.story_point_budget_per_session`)
+- Story points ≤ session budget (check `pg_seed/eclipse-che/projects.json` → `global.story_point_budget_per_session`)
 
 If analyze-issue was not run, stop and run it first.
 

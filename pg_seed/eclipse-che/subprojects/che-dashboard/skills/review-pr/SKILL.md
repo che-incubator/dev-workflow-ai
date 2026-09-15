@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Review a che-dashboard PR diff against rules/dev.md and rules.json. Reports findings grouped by severity (blocking/advisory).
+description: Review a che-dashboard PR diff against rules/dev.md and pg_seed/eclipse-che/projects.json. Reports findings grouped by severity (blocking/advisory).
 argument-hint: "[PR-number or PR-URL]"
 ---
 

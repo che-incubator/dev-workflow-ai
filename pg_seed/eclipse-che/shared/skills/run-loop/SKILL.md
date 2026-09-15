@@ -12,7 +12,7 @@ Executes the full autonomous contribution cycle for one issue in the specified E
 
 ## Required input
 
-A project name matching a key in `rules.json` → `projects`. If `$ARGUMENTS` is empty, ask the user.
+A project name matching a key in `pg_seed/eclipse-che/projects.json` → `projects`. If `$ARGUMENTS` is empty, ask the user.
 
 ## Workflow
 
@@ -29,7 +29,7 @@ cat ./projects/$ARGUMENTS/context.md
 cat ./projects/$ARGUMENTS/rules/dev.md
 
 # 4. Load project config from rules engine
-cat ./rules.json | \
+cat ./pg_seed/eclipse-che/projects.json | \
   python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d['projects']['$ARGUMENTS'], indent=2))"
 ```
 
@@ -115,7 +115,7 @@ This creates a branch, implements the fix, runs tests/lint, commits, and opens a
 ```bash
 # Get the PR number from the previous step
 PR_NUM=<from fix-issue output>
-REPO=<from rules.json>
+REPO=<from pg_seed/eclipse-che/projects.json>
 
 # Watch CI
 gh pr checks ${PR_NUM} --repo ${REPO} --watch

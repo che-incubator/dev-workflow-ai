@@ -32,7 +32,7 @@ Context files contain everything needed to start implementing. Reading source fi
 
 5. **Rules.json** (for issue filtering/scoring):
    ```
-   Read: rules.json
+   Read: pg_seed/eclipse-che/projects.json
    ```
 
 Load with the `Read` tool — do NOT use `Bash(cat ...)` or `Bash(find ...)`.

@@ -96,7 +96,21 @@ Apply score adjustments from `issue-description-quality.md` section 6 before ran
 
 ---
 
-## 7. Output Format
+## 7. Story Point Definitions
+
+| Points | Effort |
+|---|---|
+| 1 | Trivial — single file, no test changes |
+| 2 | Small — 1–3 files, minor test update |
+| 3 | Medium — 3–8 files, new test cases |
+| 5 | Large — cross-package change, significant tests |
+| 8 | Complex — architecture change, broad test coverage |
+
+Issues above 8 SP are automatically skipped (too large for a single automated PR).
+
+---
+
+## 8. Output Format
 
 ```
 ## Issue Analysis: #NNNN — <title>

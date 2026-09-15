@@ -1,62 +1,10 @@
 {
-  "version": "1.0",
-  "global": {
-    "commit_trailers": ["Assisted-by"],
-    "forbidden_trailers": ["Made-with", "Co-authored-by"],
-    "forbidden_labels": ["wontfix", "duplicate", "stale", "lifecycle/stale", "needs-triage", "blocked"],
-    "issue_must_be": "open",
-    "story_point_budget_per_session": 3
-  },
-  "auto_approve": {
-    "min_priority": "major",
-    "priority_order": ["critical", "major", "minor", "trivial"],
-    "github_label_map": {
-      "priority/critical": "critical",
-      "priority/blocker":  "critical",
-      "priority/major":    "major",
-      "priority/minor":    "minor",
-      "priority/trivial":  "trivial"
-    },
-    "jira_priority_map": {
-      "Critical": "critical",
-      "Blocker":  "critical",
-      "Major":    "major",
-      "Normal":   "minor",
-      "Minor":    "minor",
-      "Trivial":  "trivial"
-    },
-    "jira_base_url": "https://redhat.atlassian.net"
-  },
-  "story_points": {
-    "1": "trivial: single file, no test changes",
-    "2": "small: 1-3 files, minor test update",
-    "3": "medium: 3-8 files, new test cases",
-    "5": "large: cross-package change, significant tests",
-    "8": "complex: architecture change, broad test coverage"
-  },
-  "issue_scoring": {
-    "base": {
-      "kind/bug": 10,
-      "kind/enhancement": 6,
-      "area/docs": 3
-    },
-    "boosts": {
-      "priority/critical": 5,
-      "priority/high": 3,
-      "has_test_reproduction": 2,
-      "linked_failing_ci": 2,
-      "has_linked_pr": 3,
-      "has_acceptance_criteria": 1,
-      "good_first_issue": 1,
-      "reporter_is_contributor": 1
-    }
-  },
   "projects": {
     "che-dashboard": {
       "repo": "eclipse-che/che-dashboard",
       "local_path": "/Users/oleksiiorel/workspace/eclipse-che/che-dashboard",
-      "context": "projects/che-dashboard/context.md",
-      "rules": "projects/che-dashboard/rules/dev.md",
+      "context": "subprojects/che-dashboard/context.md",
+      "rules": "subprojects/che-dashboard/rules/dev.md",
       "auto_approve": { "min_priority": "major" },
       "stack": ["TypeScript", "React 18", "PatternFly 5", "Redux Toolkit", "Yarn workspaces", "Fastify"],
       "issue_labels_filter": ["area/dashboard-frontend", "area/dashboard-backend", "kind/bug", "kind/enhancement"],
@@ -83,14 +31,13 @@
         "yarn workspace @eclipse-che/dashboard-frontend test --testPathPatterns=\"<ComponentName>\" --no-cache"
       ],
       "pre_push": ["yarn build", "yarn test"],
-      "pr_template": "eclipse-che/che-dashboard",
-      "last_commit_snapshot": "2b372aea732c9c826c7771730b8e4aca9ecb41e5 2026-09-04"
+      "pr_template": "eclipse-che/che-dashboard"
     },
     "che-server": {
       "repo": "eclipse-che/che-server",
       "local_path": "/Users/oleksiiorel/workspace/eclipse-che/che-server",
-      "context": "projects/che-server/context.md",
-      "rules": "projects/che-server/rules/dev.md",
+      "context": "subprojects/che-server/context.md",
+      "rules": "subprojects/che-server/rules/dev.md",
       "stack": ["Java 17", "Quarkus", "Maven"],
       "issue_labels_filter": ["kind/bug", "kind/enhancement"],
       "coding_standards": [
@@ -100,44 +47,38 @@
         "No wildcard imports",
         "Checkstyle must pass"
       ],
-      "review_criteria": {
-        "mvn_test": true,
-        "checkstyle": true
-      },
+      "review_criteria": { "mvn_test": true, "checkstyle": true },
       "pre_commit": ["mvn checkstyle:check", "mvn test -pl <module> -am"],
-      "pre_push": ["mvn clean install"],
-      "last_commit_snapshot": "cb5afc8de1726789616f080cfe0db1b7feee44f8 2026-07-24"
+      "pre_push": ["mvn clean install"]
     },
     "che-ai-tool-images": {
       "repo": "che-incubator/che-ai-tool-images",
       "local_path": "/Users/oleksiiorel/workspace/che-incubator/che-ai-tool-images",
-      "context": "projects/che-ai-tool-images/context.md",
-      "rules": "projects/che-ai-tool-images/rules/dev.md",
+      "context": "subprojects/che-ai-tool-images/context.md",
+      "rules": "subprojects/che-ai-tool-images/rules/dev.md",
       "stack": ["Dockerfile", "Shell", "GitHub Actions"],
       "issue_labels_filter": ["kind/bug", "kind/enhancement"],
       "coding_standards": [
         "Multi-arch images: linux/amd64 + linux/arm64 always",
         "Pin tool versions explicitly — never use :latest tags",
         "Update CHANGELOG.md with every version bump"
-      ],
-      "last_commit_snapshot": "a3b810eb57334df26e5c6168a5d5693d780cd1ce 2026-08-26"
+      ]
     },
     "devworkspace-generator": {
       "repo": "che-incubator/devworkspace-generator",
       "local_path": "/Users/oleksiiorel/workspace/devfile/devworkspace-generator",
-      "context": "projects/devworkspace-generator/context.md",
-      "rules": "projects/devworkspace-generator/rules/dev.md",
+      "context": "subprojects/devworkspace-generator/context.md",
+      "rules": "subprojects/devworkspace-generator/rules/dev.md",
       "stack": ["TypeScript", "Node.js"],
       "issue_labels_filter": ["kind/bug", "kind/enhancement"],
       "coding_standards": ["TypeScript strict — no any", "yarn build && yarn test before commit"],
-      "pre_push": ["yarn build", "yarn test"],
-      "last_commit_snapshot": "c7c9ba24789c46637fa7eaf84460a4a00033fdef 2026-03-16"
+      "pre_push": ["yarn build", "yarn test"]
     },
     "devworkspace-operator": {
       "repo": "devfile/devworkspace-operator",
       "local_path": "/Users/oleksiiorel/workspace/devfile/devworkspace-operator",
-      "context": "projects/devworkspace-operator/context.md",
-      "rules": "projects/devworkspace-operator/rules/dev.md",
+      "context": "subprojects/devworkspace-operator/context.md",
+      "rules": "subprojects/devworkspace-operator/rules/dev.md",
       "auto_approve": { "min_priority": "critical" },
       "stack": ["Go 1.21+", "Operator SDK", "kubebuilder", "Kubernetes"],
       "issue_labels_filter": ["kind/bug"],
@@ -149,22 +90,20 @@
         "Unit tests required for every controller change"
       ],
       "pre_commit": ["golangci-lint run", "make test"],
-      "pre_push": ["make build", "make test"],
-      "last_commit_snapshot": "943ae8e461e43df1e7e4d756b5b4cd89faa16414 2026-04-15"
+      "pre_push": ["make build", "make test"]
     },
     "dash-licenses": {
       "repo": "che-incubator/dash-licenses",
       "local_path": "/Users/oleksiiorel/workspace/che-incubator/dash-licenses",
-      "context": "projects/dash-licenses/context.md",
+      "context": "subprojects/dash-licenses/context.md",
       "stack": ["Java", "Maven"],
-      "issue_labels_filter": ["kind/bug", "kind/enhancement"],
-      "last_commit_snapshot": "1bd84e94f0372f839f82163237af0bac5d393f47 2026-08-23"
+      "issue_labels_filter": ["kind/bug", "kind/enhancement"]
     },
     "che-docs": {
       "repo": "eclipse-che/che-docs",
       "local_path": "/Users/oleksiiorel/workspace/eclipse-che/che-docs",
-      "context": "projects/che-docs/context.md",
-      "rules": "projects/che-docs/rules/dev.md",
+      "context": "subprojects/che-docs/context.md",
+      "rules": "subprojects/che-docs/rules/dev.md",
       "stack": ["AsciiDoc", "Antora", "Vale"],
       "issue_labels_filter": ["area/docs"],
       "coding_standards": [
@@ -172,8 +111,7 @@
         "Vale linter must pass",
         "No images without alt text",
         "Max 1 story point for doc-only changes"
-      ],
-      "last_commit_snapshot": "ede3e33ca57133537388d067eff68808208de70f 2026-08-13"
+      ]
     }
   }
 }

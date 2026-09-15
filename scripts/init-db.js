@@ -102,7 +102,44 @@ async function main() {
     );
   }
 
-  console.log('[3/3] Importing knowledge from *.md files...');
+  console.log('[3/4] Importing projects from projects.json...');
+  const projectsJson = join(KNOWLEDGE_DIR, 'projects.json');
+  try {
+    const { readFile } = await import('node:fs/promises');
+    const raw = await readFile(projectsJson, 'utf8');
+    const { projects } = JSON.parse(raw);
+    const { db } = await import('../packages/agent-backend/src/db/client.js');
+    let upserted = 0;
+    for (const [name, cfg] of Object.entries(projects)) {
+      await db.query(
+        `INSERT INTO projects (name, repo, local_path, stack, description, auto_approve_min_priority, default_branch)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (name) DO UPDATE SET
+           repo = EXCLUDED.repo,
+           local_path = EXCLUDED.local_path,
+           stack = EXCLUDED.stack,
+           auto_approve_min_priority = EXCLUDED.auto_approve_min_priority,
+           updated_at = now()`,
+        [
+          name,
+          cfg.repo ?? '',
+          cfg.local_path ?? '',
+          cfg.stack ?? [],
+          cfg.description ?? '',
+          cfg.auto_approve?.min_priority ?? 'major',
+          cfg.default_branch ?? 'main',
+        ],
+      );
+      upserted++;
+    }
+    console.log(`      ✓ ${upserted} project(s) upserted from projects.json`);
+  } catch (e) {
+    console.warn(
+      `      ⚠ projects.json import failed (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  console.log('[4/4] Importing knowledge from *.md files...');
   const { importKnowledge } = await import('../packages/agent-backend/src/init/importKnowledge.js');
   const result = await importKnowledge();
 
