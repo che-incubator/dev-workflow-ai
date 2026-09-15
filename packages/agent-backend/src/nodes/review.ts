@@ -29,6 +29,8 @@ import { promisify } from 'node:util';
 import { resolve } from 'node:path';
 import { HumanMessage } from '@langchain/core/messages';
 import { llmDeep as llm } from '../llm/client.js';
+import { getAnthropicClient } from '../llm/anthropicClient.js';
+import { nodeLog } from '../agent/runner.js';
 import { loadContext, loadProjectConfig } from '../context/loader.js';
 import { State, Finding } from '../agent/state.js';
 
@@ -59,24 +61,51 @@ Respond with JSON only — no markdown fences:
 confidence: 90+ = certain, 75-89 = likely, <75 = uncertain (will be filtered out).
 Only report issues with confidence ≥ 75.`;
 
-async function runReviewer(prompt: string): Promise<Array<Finding & { confidence: number }>> {
+// Cached per-request: avoids N DB queries for N parallel reviewers
+let _reviewerAnthropicClient: Awaited<ReturnType<typeof getAnthropicClient>> | undefined;
+
+async function runReviewer(
+  name: string,
+  prompt: string,
+): Promise<Array<Finding & { confidence: number }>> {
+  nodeLog(`review: [${name}] starting…`);
   try {
-    const response = await llm.invoke([new HumanMessage(prompt)]);
     let text: string;
-    if (typeof response.content === 'string') {
-      text = response.content;
-    } else if (Array.isArray(response.content)) {
-      text = response.content
-        .map((p: unknown) => (typeof p === 'string' ? p : ((p as { text?: string }).text ?? '')))
-        .join('');
-    } else {
-      text = JSON.stringify(response.content);
+
+    // Fast path: direct Anthropic SDK (no LangChain overhead, works with parallel calls)
+    if (_reviewerAnthropicClient === undefined) {
+      _reviewerAnthropicClient = await getAnthropicClient();
     }
+    if (_reviewerAnthropicClient) {
+      text = await _reviewerAnthropicClient.ask(
+        'You are a code reviewer. Respond only with valid JSON, no markdown fences.',
+        prompt,
+      );
+    } else {
+      // Fallback: LangChain for non-Anthropic providers
+      const response = await llm.invoke([new HumanMessage(prompt)]);
+      if (typeof response.content === 'string') {
+        text = response.content;
+      } else if (Array.isArray(response.content)) {
+        text = response.content
+          .map((p: unknown) => (typeof p === 'string' ? p : ((p as { text?: string }).text ?? '')))
+          .join('');
+      } else {
+        text = JSON.stringify(response.content);
+      }
+    }
+
     const jsonStr = extractJson(text);
-    if (!jsonStr) return [];
+    if (!jsonStr) {
+      nodeLog(`review: [${name}] no JSON in response`);
+      return [];
+    }
     const parsed = JSON.parse(jsonStr) as { findings: Array<Finding & { confidence: number }> };
-    return parsed.findings ?? [];
-  } catch {
+    const findings = parsed.findings ?? [];
+    nodeLog(`review: [${name}] ${findings.length} finding(s)`);
+    return findings;
+  } catch (e) {
+    nodeLog(`review: [${name}] error — ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 }
@@ -256,12 +285,14 @@ ${JSON_SCHEMA}`
     : null;
 
   // ── Run all reviewers in parallel ─────────────────────────────────────────
+  const diffLines = diffText.split('\n').length;
+  nodeLog(`review: diff is ${diffLines} lines — launching ${isTS ? 5 : 4} parallel reviewers…`);
   const reviewerPromises = [
-    runReviewer(correctnessPrompt),
-    runReviewer(silentFailurePrompt),
-    runReviewer(testCoveragePrompt),
-    runReviewer(conventionsPrompt),
-    ...(typeDesignPrompt ? [runReviewer(typeDesignPrompt)] : []),
+    runReviewer('correctness', correctnessPrompt),
+    runReviewer('silent-failures', silentFailurePrompt),
+    runReviewer('test-coverage', testCoveragePrompt),
+    runReviewer('conventions', conventionsPrompt),
+    ...(typeDesignPrompt ? [runReviewer('type-design', typeDesignPrompt)] : []),
   ];
 
   const allResults = await Promise.all(reviewerPromises);

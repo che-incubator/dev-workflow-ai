@@ -30,6 +30,7 @@
     "license:generate": "license-tool --harvest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/static": "^10.1.3",
     "@fastify/swagger": "^9.8.1",

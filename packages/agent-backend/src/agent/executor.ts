@@ -89,15 +89,26 @@ function spawnCommand(
   });
 }
 
+/** Resolve provider from env vars when DB has no active provider configured. */
+function resolveProviderFromEnv(dbProviderId: string): string {
+  if (dbProviderId !== 'ollama') return dbProviderId; // DB has a real provider
+  // No DB provider — infer from env vars
+  if (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_VERTEX_PROJECT_ID) return 'anthropic';
+  if (process.env.GEMINI_API_KEY) return 'gemini';
+  return 'ollama';
+}
+
 /** Pick the best executor for the given provider */
 export async function detectExecutor(providerId: string): Promise<ExecutorKind> {
-  if (providerId === 'anthropic/claude' || providerId === 'anthropic') {
+  const effectiveProvider = resolveProviderFromEnv(providerId);
+
+  if (effectiveProvider === 'anthropic/claude' || effectiveProvider === 'anthropic') {
     if (await commandExists('claude')) return 'claude-cli';
   }
-  if (providerId === 'google/gemini' || providerId === 'google') {
+  if (effectiveProvider === 'google/gemini' || effectiveProvider === 'google') {
     if (await commandExists('gemini')) return 'gemini-cli';
   }
-  if (providerId === 'opencodeai/opencode' || providerId === 'opencode') {
+  if (effectiveProvider === 'opencodeai/opencode' || effectiveProvider === 'opencode') {
     if (await commandExists('opencode')) return 'opencode-cli';
   }
   return 'langgraph';

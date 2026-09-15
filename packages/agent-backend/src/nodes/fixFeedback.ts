@@ -12,6 +12,8 @@
 
 import { HumanMessage } from '@langchain/core/messages';
 import { llmDeep as llm } from '../llm/client.js';
+import { getAnthropicClient } from '../llm/anthropicClient.js';
+import { nodeLog } from '../agent/runner.js';
 import { loadProjectConfig } from '../context/loader.js';
 import { State } from '../agent/state.js';
 
@@ -58,16 +60,28 @@ After completing, respond with JSON only:
 }
 `;
 
-  const response = await llm.invoke([new HumanMessage(prompt)]);
+  // Fast path: direct Anthropic SDK
+  const anthropic = await getAnthropicClient();
+  const blockingCount = state.reviewFindings.filter(f => f.severity === 'blocking').length;
+  nodeLog(`fix_feedback: fixing ${blockingCount} blocking finding(s)…`);
   let text: string;
-  if (typeof response.content === 'string') {
-    text = response.content;
-  } else if (Array.isArray(response.content)) {
-    text = response.content
-      .map((p: unknown) => (typeof p === 'string' ? p : ((p as { text?: string }).text ?? '')))
-      .join('');
+  if (anthropic) {
+    text = await anthropic.ask(
+      'You are a code reviewer applying fixes. Respond only with valid JSON.',
+      prompt,
+    );
   } else {
-    text = JSON.stringify(response.content);
+    // Fallback: LangChain for non-Anthropic providers
+    const response = await llm.invoke([new HumanMessage(prompt)]);
+    if (typeof response.content === 'string') {
+      text = response.content;
+    } else if (Array.isArray(response.content)) {
+      text = response.content
+        .map((p: unknown) => (typeof p === 'string' ? p : ((p as { text?: string }).text ?? '')))
+        .join('');
+    } else {
+      text = JSON.stringify(response.content);
+    }
   }
   // Strip markdown code fences
   text = text.replace(/```(?:json)?\s*/m, '').replace(/```\s*$/m, '');

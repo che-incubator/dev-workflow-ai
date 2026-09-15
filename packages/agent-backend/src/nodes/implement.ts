@@ -328,18 +328,30 @@ After completing all steps, reply with JSON:
   }
 
   // ── LangGraph ReAct tool loop ─────────────────────────────────────────────
-  const systemPrompt = `You are an expert software engineer implementing a GitHub issue fix using bash tools.
-Use the bash tool to execute shell commands — git, file editing, running tests.
+  const systemPrompt = `You are an expert software engineer. Implement the fix by executing bash commands.
 
-IMPORTANT: Always pass cwd="${repoLocal || REPOS_DIR}" to every bash tool call.
-This is the target repository directory. Never run commands in the default directory.
+CRITICAL RULES:
+1. Always pass cwd="${repoLocal || REPOS_DIR}" to every bash tool call.
+2. WRITE all file changes using bash. Never describe changes — execute them.
+3. To edit a file use Python (most reliable):
+   bash: python3 -c "
+   content = open('path/to/file.ts').read()
+   content = content.replace('old_code', 'new_code')
+   open('path/to/file.ts', 'w').write(content)
+   " cwd=${repoLocal || REPOS_DIR}
+4. For multi-line changes use heredoc:
+   bash: cat > path/to/file.ts << 'ENDOFFILE'
+   ...full file content...
+   ENDOFFILE    cwd=${repoLocal || REPOS_DIR}
+5. After editing ALL files: git add -A && git commit
+6. Only after committing: respond with the JSON result.
 
 PROJECT CONTEXT:
 ${context}
 
 CODING RULES: ${isTypeScript ? "No 'any'. @/ absolute imports. EPL-2.0 header in new files." : isGo ? 'Check all errors. Context propagation.' : 'Follow existing style.'}
 
-When all steps are done, respond with JSON (no markdown):
+MANDATORY final response — JSON only, no markdown:
 {"filesChanged":["file1","file2"],"testsPassed":true,"lintPassed":true}`;
 
   const { finalOutput, toolOutputs } = await runAgentLoop(systemPrompt, taskDescription);
@@ -349,16 +361,41 @@ When all steps are done, respond with JSON (no markdown):
 
   if (!jsonMatch) {
     const newRetry = state.retryCount + 1;
+    const isLastRetry = newRetry >= 3;
 
-    if (state.dryRun && state.outputDir && toolOutputs.length > 0) {
+    if (state.dryRun && state.outputDir) {
       const slug = `${state.repoSlug.replace('/', '-')}-${state.issueNumber ?? 'unknown'}`;
       const outDir = resolve(state.outputDir, slug);
       await mkdir(outDir, { recursive: true });
+
+      // Always write the agent plan so at least exploration is visible
       await writeFile(
         join(outDir, 'agent-plan.md'),
-        `# Agent Implementation Plan\n\n**Repo:** ${repoLocal || '(no clone)'}\n\n${toolOutputs.join('\n\n')}`,
+        `# Agent Implementation Plan\n\n**Repo:** ${repoLocal || '(no clone)'}\n**Branch:** ${state.branchName || '(none)'}\n**Summary:** ${state.fixSummary}\n\n## Tool outputs\n\n${toolOutputs.join('\n\n')}`,
         'utf8',
       );
+
+      // Try to generate a real patch from any commits that may have been made
+      if (isLastRetry && repoLocal && state.branchName) {
+        try {
+          const { stdout: patch } = await execAsync(
+            `git diff main...${state.branchName} 2>/dev/null || git diff HEAD~1 2>/dev/null || echo ''`,
+            { cwd: repoLocal, timeout: 15_000 },
+          );
+          if (patch.trim()) {
+            await writeFile(join(outDir, 'changes.patch'), patch, 'utf8');
+          } else {
+            // No commits — write a placeholder so the user knows there's no diff
+            await writeFile(
+              join(outDir, 'changes.patch'),
+              `# No changes committed\n# The agent explored the code but did not commit changes.\n# Branch: ${state.branchName}\n# Repo: ${repoLocal}\n`,
+              'utf8',
+            );
+          }
+        } catch {
+          // Non-fatal
+        }
+      }
     }
 
     return {

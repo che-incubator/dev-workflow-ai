@@ -29,6 +29,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@anthropic-ai/sdk@npm:^0.125.0":
+  version: 0.125.0
+  resolution: "@anthropic-ai/sdk@npm:0.125.0"
+  dependencies:
+    json-schema-to-ts: "npm:^3.1.1"
+    standardwebhooks: "npm:^1.0.0"
+  peerDependencies:
+    zod: ^3.25.0 || ^4.0.0
+  peerDependenciesMeta:
+    zod:
+      optional: true
+  bin:
+    anthropic-ai-sdk: bin/cli
+  checksum: 10/1f7c760fb0d27c1ad141f6b114eec496be7c4390c58378cdd3a33fb07da95d5fa2593a7664f93ba215cc6625ec17fb162a564793c262627e31555f892d6d25d7
+  languageName: node
+  linkType: hard
+
 "@asamuzakjp/css-color@npm:^6.0.5":
   version: 6.0.7
   resolution: "@asamuzakjp/css-color@npm:6.0.7"
@@ -3866,6 +3883,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "dev-workflow-ai@workspace:."
   dependencies:
+    "@anthropic-ai/sdk": "npm:^0.125.0"
     "@eclipse-che/license-tool": "npm:^2.0.1-next.7742774"
     "@eslint/js": "npm:^9.0.0"
     "@fastify/cookie": "npm:^11.1.2"

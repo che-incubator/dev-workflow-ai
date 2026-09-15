@@ -13,6 +13,8 @@
 import { HumanMessage } from '@langchain/core/messages';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { llmDeep as llm } from '../llm/client.js';
+import { getAnthropicClient } from '../llm/anthropicClient.js';
+import { nodeLog } from '../agent/runner.js';
 import { loadContext } from '../context/loader.js';
 import { State } from '../agent/state.js';
 import { writeFile, mkdir } from 'node:fs/promises';
@@ -118,19 +120,28 @@ Respond with ONLY valid JSON, no markdown fences, no explanation:
 }
 `;
 
-  const pureLlm = buildPureLLM();
-  const response = await pureLlm.invoke([new HumanMessage(prompt)]);
-
-  // Gemini returns an array of content parts; flatten to string
+  // Fast path: direct Anthropic SDK (no LangChain overhead)
+  const anthropic = await getAnthropicClient();
   let text: string;
-  if (typeof response.content === 'string') {
-    text = response.content;
-  } else if (Array.isArray(response.content)) {
-    text = response.content
-      .map(p => (typeof p === 'string' ? p : ((p as { text?: string }).text ?? '')))
-      .join('');
+  if (anthropic) {
+    nodeLog(`analyze: calling ${anthropic.model} via direct SDK…`);
+    text = await anthropic.ask(
+      'You are a code analysis assistant. Respond only with valid JSON, no markdown.',
+      prompt,
+    );
   } else {
-    text = JSON.stringify(response.content);
+    // Fallback: LangChain (Gemini / Ollama / other providers)
+    const pureLlm = buildPureLLM();
+    const response = await pureLlm.invoke([new HumanMessage(prompt)]);
+    if (typeof response.content === 'string') {
+      text = response.content;
+    } else if (Array.isArray(response.content)) {
+      text = response.content
+        .map(p => (typeof p === 'string' ? p : ((p as { text?: string }).text ?? '')))
+        .join('');
+    } else {
+      text = JSON.stringify(response.content);
+    }
   }
 
   // Strip markdown code fences (```json ... ```) that some models add

@@ -15,6 +15,8 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../../db/client.js';
 import { loadProjectConfig } from '../../context/loader.js';
 import { getGraph } from '../../agent/graph.js';
+import { runAgent } from '../../agent/runner.js';
+import { isAnthropicActive } from '../../llm/anthropicClient.js';
 import { emitRunEvent } from '../ws/agentStream.js';
 import type { AgentRunRow, RunEventRow, FindingRow } from '../../db/schema.js';
 import type { State } from '../../agent/state.js';
@@ -152,95 +154,136 @@ export async function runAgentInBackground(
   const controller = new AbortController();
   runningJobs.set(threadId, controller);
 
+  // ── Emit helper — persists to DB and sends WS event ──────────────────────
+  async function emitAndPersist(nodeName: string, msg: string): Promise<void> {
+    emitRunEvent(threadId, {
+      type: 'log',
+      threadId,
+      payload: { node: nodeName, message: msg, level: 'info' },
+    });
+    await db.query(
+      'INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)',
+      [threadId, nodeName, nodeName, msg],
+    );
+  }
+
   try {
-    const app = await getGraph();
-    const agentConfig = {
-      configurable: { thread_id: threadId },
-      signal: controller.signal,
-    };
+    // ── Fast path: direct runner (Anthropic / Vertex) ─────────────────────
+    if (await isAnthropicActive()) {
+      console.log(`[run ${threadId}] Using direct runner (Anthropic SDK)`);
 
-    for await (const chunk of await app.stream(initialState, agentConfig)) {
-      if (controller.signal.aborted) break;
-      const nodeNames = Object.keys(chunk as Record<string, unknown>);
-      for (const nodeName of nodeNames) {
-        const nodeOutput = (chunk as Record<string, unknown>)[nodeName] as Partial<State>;
-        const messages: string[] = nodeOutput.messages ?? [];
-
-        for (const msg of messages) {
-          const event = {
-            type: 'log',
-            threadId,
-            payload: { node: nodeName, message: msg, level: 'info' },
-          };
-          emitRunEvent(threadId, event);
-
-          await db.query(
-            'INSERT INTO run_events (thread_id, phase, node, message) VALUES ($1, $2, $3, $4)',
-            [threadId, nodeName, nodeName, msg],
-          );
-        }
-
-        emitRunEvent(threadId, {
-          type: 'node_complete',
-          threadId,
-          payload: { node: nodeName, status: nodeOutput.status ?? '' },
-        });
-
-        // Persist findings
-        if (nodeOutput.reviewFindings?.length) {
-          for (const f of nodeOutput.reviewFindings) {
+      await runAgent(
+        initialState,
+        async event => {
+          if (event.type === 'log') {
+            await emitAndPersist(event.node, event.message);
+          } else if (event.type === 'node_start') {
+            emitRunEvent(threadId, { type: 'node_start', threadId, payload: { node: event.node } });
+          } else if (event.type === 'node_complete') {
+            emitRunEvent(threadId, {
+              type: 'node_complete',
+              threadId,
+              payload: { node: event.node, status: event.status },
+            });
+          } else if (event.type === 'run_complete') {
+            if (event.prUrl) {
+              await db.query('UPDATE agent_runs SET pr_url = $2 WHERE thread_id = $1', [
+                threadId,
+                event.prUrl,
+              ]);
+            }
+          } else if (event.type === 'run_failed') {
             await db.query(
-              'INSERT INTO findings (thread_id, file, line, severity, finding, tier) VALUES ($1,$2,$3,$4,$5,$6)',
-              [threadId, f.file ?? '', f.line ?? null, f.severity, f.finding, f.tier ?? 'tier1'],
+              "UPDATE agent_runs SET status = 'failed', finished_at = now() WHERE thread_id = $1",
+              [threadId],
+            );
+            await emitAndPersist('error', `Agent failed: ${event.error}`).catch(() => {});
+            emitRunEvent(threadId, {
+              type: 'run_failed',
+              threadId,
+              payload: { error: event.error },
+            });
+          } else if (event.type === 'run_skipped') {
+            await emitAndPersist('skip', event.reason).catch(() => {});
+          }
+        },
+        controller.signal,
+      );
+    } else {
+      // ── Fallback path: LangGraph (Gemini / Ollama / OpenAI) ──────────────
+      console.log(`[run ${threadId}] Using LangGraph fallback`);
+      const app = await getGraph();
+      const agentConfig = {
+        configurable: { thread_id: threadId },
+        signal: controller.signal,
+      };
+
+      for await (const chunk of await app.stream(initialState, agentConfig)) {
+        if (controller.signal.aborted) break;
+        const nodeNames = Object.keys(chunk as Record<string, unknown>);
+        for (const nodeName of nodeNames) {
+          const nodeOutput = (chunk as Record<string, unknown>)[nodeName] as Partial<State>;
+          const messages: string[] = nodeOutput.messages ?? [];
+
+          for (const msg of messages) {
+            await emitAndPersist(nodeName, msg);
+          }
+
+          emitRunEvent(threadId, {
+            type: 'node_complete',
+            threadId,
+            payload: { node: nodeName, status: nodeOutput.status ?? '' },
+          });
+
+          if (nodeOutput.reviewFindings?.length) {
+            for (const f of nodeOutput.reviewFindings) {
+              await db.query(
+                'INSERT INTO findings (thread_id, file, line, severity, finding, tier) VALUES ($1,$2,$3,$4,$5,$6)',
+                [threadId, f.file ?? '', f.line ?? null, f.severity, f.finding, f.tier ?? 'tier1'],
+              );
+            }
+          }
+
+          if (nodeOutput.issueNumber) {
+            await db.query(
+              `UPDATE agent_runs SET issue_number = $2, issue_title = $3, issue_url = $4, story_points = $5 WHERE thread_id = $1`,
+              [
+                threadId,
+                nodeOutput.issueNumber,
+                nodeOutput.issueTitle ?? '',
+                nodeOutput.issueUrl ?? '',
+                nodeOutput.storyPoints ?? 0,
+              ],
             );
           }
-        }
-
-        // Update run row with latest state fields
-        if (nodeOutput.issueNumber) {
-          await db.query(
-            `UPDATE agent_runs SET
-              issue_number = $2, issue_title = $3, issue_url = $4,
-              story_points = $5
-             WHERE thread_id = $1`,
-            [
+          if (nodeOutput.priority) {
+            await db.query(
+              'UPDATE agent_runs SET priority = $2, priority_source = $3, jira_key = $4 WHERE thread_id = $1',
+              [
+                threadId,
+                nodeOutput.priority,
+                nodeOutput.prioritySource ?? '',
+                nodeOutput.jiraKey ?? '',
+              ],
+            );
+          }
+          if (nodeOutput.prUrl) {
+            await db.query(
+              'UPDATE agent_runs SET pr_url = $2, pr_number = $3 WHERE thread_id = $1',
+              [threadId, nodeOutput.prUrl, nodeOutput.prNumber ?? null],
+            );
+          }
+          if (nodeOutput.reviewVerdict) {
+            await db.query('UPDATE agent_runs SET verdict = $2 WHERE thread_id = $1', [
               threadId,
-              nodeOutput.issueNumber,
-              nodeOutput.issueTitle ?? '',
-              nodeOutput.issueUrl ?? '',
-              nodeOutput.storyPoints ?? 0,
-            ],
-          );
-        }
-        if (nodeOutput.priority) {
-          await db.query(
-            'UPDATE agent_runs SET priority = $2, priority_source = $3, jira_key = $4 WHERE thread_id = $1',
-            [
-              threadId,
-              nodeOutput.priority,
-              nodeOutput.prioritySource ?? '',
-              nodeOutput.jiraKey ?? '',
-            ],
-          );
-        }
-        if (nodeOutput.prUrl) {
-          await db.query('UPDATE agent_runs SET pr_url = $2, pr_number = $3 WHERE thread_id = $1', [
-            threadId,
-            nodeOutput.prUrl,
-            nodeOutput.prNumber ?? null,
-          ]);
-        }
-        if (nodeOutput.reviewVerdict) {
-          await db.query('UPDATE agent_runs SET verdict = $2 WHERE thread_id = $1', [
-            threadId,
-            nodeOutput.reviewVerdict,
-          ]);
+              nodeOutput.reviewVerdict,
+            ]);
+          }
         }
       }
     }
 
     if (controller.signal.aborted) {
-      // Cancelled by user — status already set to 'failed' by DELETE handler
       console.log(`[run ${threadId}] Cancelled by user`);
     } else {
       await db.query(
@@ -251,7 +294,6 @@ export async function runAgentInBackground(
     }
   } catch (err: unknown) {
     if (controller.signal.aborted) {
-      // AbortError thrown by LangGraph when signal fires — not a real error
       console.log(`[run ${threadId}] Cancelled (abort signal)`);
     } else {
       const msg = err instanceof Error ? err.message : String(err);
