@@ -39,8 +39,7 @@ dev-workflow-ai/
 │   └── run-local-podman.sh          ← Run locally with Podman (pulls pre-built image)
 ├── scripts/
 │   ├── dev-api.sh                   ← Start API (PGlite, hot-reload)
-│   ├── init-db.js                   ← Seed DB from pg_seed/
-│   └── run-issue-direct.js          ← Run agent directly on an issue URL
+│   └── init-db.sh                   ← Seed DB from pg_seed/ (runs built init-db.cjs)
 ├── devfile.yaml                     ← Eclipse Che DevWorkspace (PGlite, single container)
 └── .claude/                         ← Claude Code skills + rules for this repo
 ```
@@ -48,11 +47,12 @@ dev-workflow-ai/
 ## Dev Commands
 
 ```bash
-yarn start:prepare   # seed DB from pg_seed/eclipse-che/ + start API (first run)
-yarn dev             # start API only (tsx, PGlite, port 3000)
-yarn start           # webpack frontend dev server (port 5173)
+yarn build           # webpack build (backend + frontend)
+yarn prepare:db      # seed DB from pg_seed/ (requires build)
+yarn start           # run the built API server (port 3000)
+yarn start:frontend  # webpack frontend dev server (port 5173)
+yarn start:watch     # dev mode — tsx hot-reload, no build needed
 yarn test            # vitest
-yarn build           # production webpack build (UI + API)
 ```
 
 API docs: http://localhost:3000/swagger

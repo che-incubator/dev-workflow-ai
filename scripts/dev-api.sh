@@ -1,53 +1,33 @@
 #!/usr/bin/env bash
-#
 # Copyright (c) 2026 Red Hat, Inc.
-# This program and the accompanying materials are made
-# available under the terms of the Eclipse Public License 2.0
-# which is available at https://www.eclipse.org/legal/epl-2.0/
+# EPL-2.0 — see LICENSE
 #
-# SPDX-License-Identifier: EPL-2.0
+# Start the backend API in dev mode (tsx hot-reload, no build needed).
 #
-# dev-api.sh — start the agent backend API with local development defaults.
-#
-# Sets sensible defaults so `yarn dev:api` works out of the box:
-#   - PGlite (no postgres needed), data persisted in .local/pglite
-#   - knowledge loaded from pg_seed/eclipse-che
-#   - dry-run output written to output/ (PRs are NOT created unless GITHUB_TOKEN is set)
-#
-# Override any variable before running:
-#   DATABASE_URL=postgres://... yarn dev:api   ← switch to real postgres
-#   GITHUB_TOKEN=ghp_... yarn dev:api          ← enable real PR creation
+# Usage:
+#   yarn start:watch
+#   DATABASE_URL=postgres://... yarn start:watch   ← use real postgres
+#   GITHUB_TOKEN=ghp_... yarn start:watch          ← enable real PR creation
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Forward SIGINT/SIGTERM to all child processes so tsx stops cleanly
-# when the terminal is closed or Ctrl+C is pressed.
 trap 'kill 0' SIGINT SIGTERM EXIT
 
 # Load .env if present (shell env vars take precedence)
 if [[ -f "$ROOT/.env" ]]; then
   set -a; source "$ROOT/.env"; set +a
   echo "[dev] Loaded .env"
-else
-  echo "[dev] No .env file found — using env vars from shell / injected secrets"
 fi
 
-# PGlite persistent storage — no postgres server needed
 export PGLITE_DATA_DIR="${PGLITE_DATA_DIR:-$ROOT/.local/pglite}"
-
-# Local knowledge pack
 export KNOWLEDGE_DIR="${KNOWLEDGE_DIR:-$ROOT/pg_seed/eclipse-che}"
-
-# Dry-run artifact output directory
 export OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/output}"
 
 mkdir -p "$ROOT/.local/pglite" "$ROOT/output"
 
-# ── PGlite integrity check ─────────────────────────────────────────────────
-# A previous force-kill can leave the WASM postgres in a corrupted state.
-# Detect it now by running a quick startup; wipe and recreate on failure.
-if [[ -n "${PGLITE_DATA_DIR:-}" && -d "$PGLITE_DATA_DIR" && -z "${DATABASE_URL:-}" ]]; then
+# PGlite corruption check
+if [[ -d "$PGLITE_DATA_DIR" && -z "${DATABASE_URL:-}" ]]; then
   node --input-type=module <<'EOF' 2>/dev/null
 import { PGlite } from '@electric-sql/pglite';
 const db = new PGlite(process.env.PGLITE_DATA_DIR);
@@ -63,23 +43,18 @@ fi
 
 echo "[dev] PGLITE_DATA_DIR=$PGLITE_DATA_DIR"
 echo "[dev] KNOWLEDGE_DIR=$KNOWLEDGE_DIR"
-echo "[dev] OUTPUT_DIR=$OUTPUT_DIR"
 if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-  echo "[dev] GITHUB_TOKEN not set — dry-run mode (no PRs, no GitHub identity)"
-else
-  export GITHUB_TOKEN
-  echo "[dev] GITHUB_TOKEN set — real PR creation enabled, GitHub identity will be resolved"
+  echo "[dev] GITHUB_TOKEN not set — dry-run mode"
 fi
 echo ""
 
-# Release port 3000 if still held by a previous dev process
+# Release port 3000 if held by a previous dev process
 PORT="${PORT:-3000}"
 if lsof -ti :"$PORT" &>/dev/null; then
   echo "[dev] Port $PORT in use — releasing..."
   lsof -ti :"$PORT" | xargs kill -SIGTERM 2>/dev/null || true
   sleep 0.8
-  # Force-kill any survivors
   lsof -ti :"$PORT" | xargs kill -SIGKILL 2>/dev/null || true
 fi
 
-exec node_modules/.bin/tsx packages/agent-backend/src/index.ts
+exec node_modules/.bin/tsx --watch packages/agent-backend/src/index.ts

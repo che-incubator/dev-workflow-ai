@@ -38,43 +38,52 @@ components:
           value: "qwen2.5-coder:7b"
 
 commands:
-  - id: start-prepare
-    exec:
-      label: "[DWA] start:prepare — seed DB from pg_seed/"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn start:prepare"
-      group:
-        kind: run
-
-  - id: dev
-    exec:
-      label: "[DWA] dev — start API (PGlite, hot-reload)"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn dev"
-      group:
-        kind: run
-        isDefault: true
-
-  - id: start
-    exec:
-      label: "[DWA] start — frontend dev server (port 5173)"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn start"
-      group:
-        kind: run
-
   - id: build
     exec:
-      label: "[DWA] build — UI + API (production webpack)"
+      label: "[DWA] build — backend + frontend webpack"
       component: tools
       workingDir: ${PROJECT_SOURCE}
       commandLine: "yarn build"
       group:
         kind: build
         isDefault: true
+
+  - id: prepare-db
+    exec:
+      label: "[DWA] prepare:db — seed DB from pg_seed/"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "yarn prepare:db"
+      group:
+        kind: run
+
+  - id: start
+    exec:
+      label: "[DWA] start — run built API server (port 3000)"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "yarn start"
+      group:
+        kind: run
+
+  - id: start-watch
+    exec:
+      label: "[DWA] start:watch — dev mode (tsx hot-reload)"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "yarn start:watch"
+      group:
+        kind: run
+        isDefault: true
+
+  - id: start-frontend
+    exec:
+      label: "[DWA] start:frontend — webpack dev server (port 5173)"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "yarn start:frontend"
+      group:
+        kind: run
 
   - id: test
     exec:
@@ -85,15 +94,6 @@ commands:
       group:
         kind: test
         isDefault: true
-
-  - id: run-issue
-    exec:
-      label: "[DWA] run-issue — run agent directly on an issue URL"
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: "yarn run-issue"
-      group:
-        kind: run
 
   - id: license-generate
     exec:

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /*
  * Copyright (c) 2026 Red Hat, Inc.
  * This program and the accompanying materials are made
@@ -12,33 +11,25 @@
  */
 
 /**
- * init-db.js — initialise the database from local *.md files
+ * init-db — initialize the database from local *.md knowledge files
  *
- * Usage:
- *   node scripts/init-db.js
- *   node scripts/init-db.js --dir /path/to/custom/knowledge/dir
- *   node scripts/init-db.js --dry-run   (print what would be imported, no DB writes)
+ * Built by webpack as a separate entry point (lib/server/init-db.cjs).
+ * Run via: scripts/init-db.sh
  *
  * What it does:
  *   1. Runs all DB migrations (idempotent — safe to run again)
- *   2. Sets up LangGraph checkpoint tables
- *   3. Scans *.md files in the knowledge directory
- *   4. Reads YAML frontmatter from projects/<slug>/context.md:
- *        repo, stack, description, local_path,
- *        auto_approve_min_priority, story_point_budget, issue_source
- *   5. Registers each project in the `projects` table
- *   6. Registers each issue_source in `issue_sources`
- *   7. Upserts all *.md content into `contexts`
- *
- * To add a new project (any repo, not just Eclipse Che):
- *   1. Create projects/<your-slug>/context.md with frontmatter
- *   2. Re-run: node scripts/init-db.js
- *   Done — no code changes needed.
- *
- * Requires: DATABASE_URL env var (or set in .env)
+ *   2. Imports projects from projects.json
+ *   3. Upserts all *.md content into `contexts`
+ *   4. Seeds default LLM providers and issue sources
  */
 
 import { join, resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { runMigrations } from './db/migrations.js';
+import { importKnowledge } from './init/importKnowledge.js';
+import { seedDefaultProviders } from './api/routes/providers.js';
+import { seedDefaultSources } from './init/seedSources.js';
+import { db } from './db/client.js';
 
 // ── CLI args ───────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -50,22 +41,15 @@ const dirArg =
 
 const ROOT = resolve(process.cwd());
 
-// Resolve DevWorkspace predefined variables that the operator may leave unsubstituted
-// in env var values (e.g. KNOWLEDGE_DIR="${PROJECT_SOURCE}/pg_seed/eclipse-che").
-function resolveDevWorkspaceVars(value) {
+function resolveDevWorkspaceVars(value: string): string {
   return value
     .replace(/\$\{PROJECT_SOURCE\}/g, process.env.PROJECT_SOURCE ?? ROOT)
     .replace(/\$\{PROJECTS_ROOT\}/g, process.env.PROJECTS_ROOT ?? '/projects');
 }
 
-// Priority: --dir arg > KNOWLEDGE_DIR env var > <repo-root>/pg_seed/eclipse-che
 const rawKnowledgeDir = process.env.KNOWLEDGE_DIR ?? join(ROOT, 'pg_seed/eclipse-che');
 const KNOWLEDGE_DIR = dirArg ? resolve(dirArg) : resolve(resolveDevWorkspaceVars(rawKnowledgeDir));
 process.env.KNOWLEDGE_DIR = KNOWLEDGE_DIR;
-
-if (dryRun) {
-  console.log('⚠  DRY RUN — no database writes\n');
-}
 
 // ── Main ───────────────────────────────────────────────────────────────────
 async function main() {
@@ -80,37 +64,21 @@ async function main() {
   console.log();
 
   if (dryRun) {
-    console.log('\n⚠  Dry-run mode — exiting without DB writes.');
+    console.log('⚠  Dry-run mode — exiting without DB writes.');
     console.log('   Remove --dry-run to apply.');
     process.exit(0);
   }
 
-  console.log('\n[1/3] Running DB migrations...');
-  const { runMigrations } = await import('../packages/agent-backend/src/db/migrations.js');
+  console.log('[1/5] Running DB migrations...');
   await runMigrations();
 
-  console.log('[2/3] Setting up LangGraph checkpoints...');
-  try {
-    const { PostgresSaver } = await import('@langchain/langgraph-checkpoint-postgres');
-    const checkpointer = await PostgresSaver.fromConnString(process.env.DATABASE_URL);
-    await checkpointer.setup();
-    console.log('      ✓ LangGraph checkpoint tables ready');
-  } catch (e) {
-    console.warn(
-      '      ⚠ LangGraph checkpoint setup failed (non-fatal):',
-      e instanceof Error ? e.message : String(e),
-    );
-  }
-
-  console.log('[3/4] Importing projects from projects.json...');
+  console.log('[2/5] Importing projects from projects.json...');
   const projectsJson = join(KNOWLEDGE_DIR, 'projects.json');
   try {
-    const { readFile } = await import('node:fs/promises');
     const raw = await readFile(projectsJson, 'utf8');
     const { projects } = JSON.parse(raw);
-    const { db } = await import('../packages/agent-backend/src/db/client.js');
     let upserted = 0;
-    for (const [name, cfg] of Object.entries(projects)) {
+    for (const [name, cfg] of Object.entries(projects) as [string, Record<string, unknown>][]) {
       await db.query(
         `INSERT INTO projects (name, repo, local_path, stack, description, auto_approve_min_priority, default_branch)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -122,12 +90,12 @@ async function main() {
            updated_at = now()`,
         [
           name,
-          cfg.repo ?? '',
-          cfg.local_path ?? '',
-          cfg.stack ?? [],
-          cfg.description ?? '',
-          cfg.auto_approve?.min_priority ?? 'major',
-          cfg.default_branch ?? 'main',
+          (cfg.repo as string) ?? '',
+          (cfg.local_path as string) ?? '',
+          (cfg.stack as string[]) ?? [],
+          (cfg.description as string) ?? '',
+          ((cfg.auto_approve as Record<string, string>)?.min_priority as string) ?? 'major',
+          (cfg.default_branch as string) ?? 'main',
         ],
       );
       upserted++;
@@ -139,9 +107,14 @@ async function main() {
     );
   }
 
-  console.log('[4/4] Importing knowledge from *.md files...');
-  const { importKnowledge } = await import('../packages/agent-backend/src/init/importKnowledge.js');
+  console.log('[3/5] Importing knowledge from *.md files...');
   const result = await importKnowledge();
+
+  console.log('[4/5] Seeding default LLM providers...');
+  await seedDefaultProviders();
+
+  console.log('[5/5] Seeding default issue sources...');
+  await seedDefaultSources();
 
   console.log();
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -152,8 +125,7 @@ async function main() {
   console.log(`  Issue sources added:    ${result.sources}`);
   console.log();
   console.log('  Next steps:');
-  console.log('    • Start the stack:   yarn dev');
-  console.log('    • Run an issue:      yarn run-issue <github-issue-url>');
+  console.log('    • Start the server:  yarn start');
   console.log();
 }
 

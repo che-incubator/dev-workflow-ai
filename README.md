@@ -18,17 +18,23 @@ yarn install
 export ANTHROPIC_API_KEY=sk-ant-...   # or GEMINI_API_KEY / ANTHROPIC_VERTEX_PROJECT_ID
 export GITHUB_TOKEN=ghp_...           # required to open real PRs
 
-# 3. Prepare and start (seeds DB + starts API in one step)
-yarn start:prepare
+# 3. Build and seed the database
+yarn build
+yarn prepare:db
+
+# 4. Start the API server
+yarn start
 ```
 
 Open **http://localhost:3000** — the agent UI is ready.
+
+For development with hot-reload: `yarn start:watch` (no build needed).
 
 ---
 
 ## Configuration
 
-All configuration lives in `.env` (loaded automatically by `yarn dev`).
+All configuration lives in `.env` (loaded automatically by `yarn start:watch`).
 
 ### LLM backend
 
@@ -64,12 +70,6 @@ JIRA_BASE_URL=https://your-org.atlassian.net
 ### Run on an issue
 
 From the **Issues** page: paste any GitHub or Jira issue URL and click **▶ Start**.
-
-From the terminal:
-
-```bash
-yarn run-issue https://github.com/eclipse-che/che-dashboard/issues/1234
-```
 
 ### Batch CVE fix
 
@@ -172,11 +172,12 @@ echo $ANTHROPIC_VERTEX_PROJECT_ID
 ## Development
 
 ```bash
-yarn start:prepare   # seed DB from pg_seed/ + start API (combined first-run)
-yarn dev             # start API only (PGlite, tsx hot-reload)
-yarn start           # start webpack frontend dev server (port 5173)
+yarn build           # build backend + frontend
+yarn prepare:db      # seed DB from pg_seed/ (requires build)
+yarn start           # run the built API server (port 3000)
+yarn start:frontend  # webpack frontend dev server (port 5173)
+yarn start:watch     # dev mode — tsx hot-reload, no build needed
 yarn test            # run all tests
-yarn build           # production build
 ```
 
 API docs: **http://localhost:3000/swagger**

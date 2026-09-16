@@ -17,11 +17,12 @@ Review runs on the local branch diff **before** the PR is opened. Blocking findi
 ## Dev Commands
 
 ```bash
-yarn start:prepare   # seed DB from pg_seed/eclipse-che/ + start API (first run)
-yarn dev             # start API only (tsx hot-reload, PGlite, port 3000)
-yarn start           # webpack frontend dev server (port 5173)
+yarn build           # webpack build (backend + frontend)
+yarn prepare:db      # seed DB from pg_seed/ (requires build)
+yarn start           # run the built API server (port 3000)
+yarn start:frontend  # webpack frontend dev server (port 5173)
+yarn start:watch     # dev mode — tsx hot-reload, no build needed
 yarn test            # vitest run
-yarn build           # production build (UI + API webpack)
 ```
 
 ## Knowledge Pack Structure
