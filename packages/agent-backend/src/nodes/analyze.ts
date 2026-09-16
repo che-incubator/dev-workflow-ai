@@ -59,6 +59,7 @@ export async function analyzeNode(state: State): Promise<Partial<State>> {
     'context', // project description, stack, local_path
     'rules-issue-analysis', // shared: how to identify affected files and scope
     'rules-issue-filtering', // shared: scoring rules, priority boosts, CVE handling
+    'rules-issue-description-quality', // shared: min description quality, CVE signals, red flags
     'rules-cve-batch', // shared: CVE batch rules and priority
     'skills-analyze-issue', // project-specific analyze skill (if present)
   ]);

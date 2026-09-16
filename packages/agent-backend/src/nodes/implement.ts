@@ -204,7 +204,9 @@ export async function implementNode(state: State): Promise<Partial<State>> {
   const context = await loadContext(state.project, [
     'context',
     'rules-dev',
+    'rules-commit-conventions', // shared: commit message format, trailers, types
     'skills-fix-issue', // project-specific implementation skill (if present)
+    'skills-fix-cve-dep', // project-specific CVE dep upgrade steps (if present)
   ]);
   const config = await loadProjectConfig(state.project);
 
