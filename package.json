@@ -15,11 +15,11 @@
     ]
   },
   "scripts": {
-    "dev": "bash scripts/dev-api.sh",
-    "start:prepare": "node --env-file-if-exists=.env --import=tsx/esm scripts/init-db.js",
-    "start": "yarn workspace @dev-workflow-ai/agent-frontend dev",
     "build": "yarn workspaces foreach -A run build",
-    "run-issue": "node --env-file-if-exists=.env --import=tsx/esm scripts/run-issue-direct.js",
+    "prepare:db": "bash scripts/init-db.sh",
+    "start": "node packages/agent-backend/lib/server/index.cjs",
+    "start:watch": "bash scripts/dev-api.sh",
+    "start:frontend": "yarn workspace @dev-workflow-ai/agent-frontend dev",
     "test": "vitest run",
     "lint:check": "yarn workspaces foreach -A run lint:check",
     "lint:fix": "yarn workspaces foreach -A run lint:fix",
@@ -40,6 +40,7 @@
     "@langchain/core": "^1.2.10",
     "@langchain/google-genai": "^2.3.0",
     "@langchain/langgraph": "^1.4.14",
+    "@langchain/langgraph-checkpoint": "^1.1.4",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.5",
     "@langchain/ollama": "^1.3.0",
     "@langchain/openai": "^1.5.12",
@@ -58,6 +59,7 @@
   "devDependencies": {
     "@eclipse-che/license-tool": "^2.0.1-next.7742774",
     "@eslint/js": "^9.0.0",
+    "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^22.0.0",

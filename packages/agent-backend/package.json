@@ -4,13 +4,10 @@
   "description": "Autonomous AI engineer — Fastify API + LangGraph agent",
   "license": "EPL-2.0",
   "type": "module",
-  "main": "lib/server/index.js",
+  "main": "lib/server/index.cjs",
   "scripts": {
-    "build": "webpack --color --config webpack.config.cjs --mode production",
-    "build:dev": "webpack --color --config webpack.config.cjs --mode development",
-    "build:watch": "yarn build:dev --watch",
-    "start": "node lib/server/index.js",
-    "start:debug": "node --inspect lib/server/index.js",
+    "build": "webpack --color --config webpack.config.cjs",
+    "build:watch": "webpack --color --config webpack.config.cjs --watch",
     "format:check": "prettier --check 'src/**/*.ts'",
     "format:fix": "prettier --write 'src/**/*.ts'",
     "lint:check": "eslint 'src/**/*.ts'",
@@ -19,7 +16,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
-    "@langchain/openai": "^1.5.12",
+    "@langchain/core": "^1.2.10",
     "pino-pretty": "^13.1.3"
   }
 }

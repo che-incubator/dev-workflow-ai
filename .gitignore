@@ -59,3 +59,4 @@ coverage/
 .claude/settings.local.json
 .worktrees/
 .tmp/
+identifier.sqlite
