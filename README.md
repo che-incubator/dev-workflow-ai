@@ -1,5 +1,7 @@
 # dev-workflow-ai
 
+[![Contribute (nightly)](https://img.shields.io/static/v1?label=nightly%20Che&message=for%20maintainers&logo=eclipseche&color=FDB940&labelColor=525C86)](https://che-dogfooding.apps.che-dev.x6e0.p1.openshiftapps.com#https://github.com/che-incubator/dev-workflow-ai)
+
 Autonomous AI software engineer for Eclipse Che — picks an issue, implements the fix, reviews the code, and opens a pull request unattended.
 
 Review runs **before** the PR is opened so only clean code is published. Bundled knowledge pack covers the full Eclipse Che ecosystem (che-dashboard, che-server, devworkspace-operator, and more).
