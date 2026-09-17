@@ -48,6 +48,85 @@ function parseJiraUrl(url: string): { key: string } | null {
   return m ? { key: m[1].toUpperCase() } : null;
 }
 
+/** Map Jira component names to project slugs */
+const JIRA_COMPONENT_TO_PROJECT: Record<string, string> = {
+  'dashboard': 'che-dashboard',
+  'dashboard-frontend': 'che-dashboard',
+  'dashboard-backend': 'che-dashboard',
+  'che-dashboard': 'che-dashboard',
+  'server': 'che-server',
+  'che-server': 'che-server',
+  'workspace-engine': 'che-server',
+  'devworkspace': 'devworkspace-operator',
+  'devworkspace-operator': 'devworkspace-operator',
+  'operator': 'devworkspace-operator',
+  'devworkspace-generator': 'devworkspace-generator',
+  'docs': 'che-docs',
+  'documentation': 'che-docs',
+  'che-docs': 'che-docs',
+  'dash-licenses': 'dash-licenses',
+  'ai-tool-images': 'che-ai-tool-images',
+  'che-ai-tool-images': 'che-ai-tool-images',
+};
+
+/** Map Jira issue title/summary keywords to project slugs */
+function projectFromKeywords(text: string): string | null {
+  const t = text.toLowerCase();
+  if (/\bdashboard\b/.test(t)) return 'che-dashboard';
+  if (/\bdevworkspace[- ]?operator\b|\bworkspace[- ]?controller\b|\bpvc\b|\bstorage\s+strategy\b|\bfinalizer\b/.test(t)) return 'devworkspace-operator';
+  if (/\bdevworkspace[- ]?generator\b/.test(t)) return 'devworkspace-generator';
+  if (/\bche[- ]?server\b|\bworkspace[- ]?engine\b|\boauth\b/.test(t)) return 'che-server';
+  if (/\bdocument\w*\b|\bantora\b|\bascii\s?doc\b/.test(t)) return 'che-docs';
+  return null;
+}
+
+/** Fetch Jira issue components and summary to determine project */
+async function projectFromJiraApi(key: string): Promise<string | null> {
+  const jiraToken = process.env.JIRA_TOKEN;
+  const jiraEmail = process.env.JIRA_EMAIL;
+  const jiraBase = process.env.JIRA_BASE_URL ?? 'https://issues.redhat.com';
+  if (!jiraToken || !jiraEmail) return null;
+
+  try {
+    const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+    const res = await fetch(
+      `${jiraBase}/rest/api/3/issue/${key}?fields=summary,components,labels`,
+      { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      fields: {
+        summary?: string;
+        components?: Array<{ name: string }>;
+        labels?: string[];
+      };
+    };
+    const components = data.fields.components ?? [];
+    for (const c of components) {
+      const slug = JIRA_COMPONENT_TO_PROJECT[c.name.toLowerCase()];
+      if (slug) {
+        console.log(`[project] ${key}: matched component "${c.name}" → ${slug}`);
+        return slug;
+      }
+    }
+    for (const label of data.fields.labels ?? []) {
+      const slug = JIRA_COMPONENT_TO_PROJECT[label.toLowerCase()];
+      if (slug) {
+        console.log(`[project] ${key}: matched label "${label}" → ${slug}`);
+        return slug;
+      }
+    }
+    const fromTitle = projectFromKeywords(data.fields.summary ?? '');
+    if (fromTitle) {
+      console.log(`[project] ${key}: matched summary keywords → ${fromTitle}`);
+      return fromTitle;
+    }
+  } catch {
+    /* non-fatal */
+  }
+  return null;
+}
+
 /** Find project_slug for a Jira key by looking it up in issues → issue_sources */
 async function projectForJiraKey(key: string): Promise<string | null> {
   // 1. Issue row with a project_slug on its source
@@ -61,23 +140,28 @@ async function projectForJiraKey(key: string): Promise<string | null> {
   );
   if (rows[0]?.project_slug) return rows[0].project_slug;
 
-  // 2. Any Jira source with a project_slug set
+  // 2. Fetch from Jira API: components, labels, summary keywords
+  const fromApi = await projectFromJiraApi(key);
+  if (fromApi) return fromApi;
+
+  // 3. Issue title keywords from DB (if already fetched but source has no project_slug)
+  const { rows: issueRows } = await db.query<{ title: string }>(
+    `SELECT title FROM issues WHERE external_id = $1 LIMIT 1`,
+    [key],
+  );
+  if (issueRows[0]?.title) {
+    const fromTitle = projectFromKeywords(issueRows[0].title);
+    if (fromTitle) return fromTitle;
+  }
+
+  // 4. Any Jira source with a project_slug set
   const { rows: src } = await db.query<{ project_slug: string }>(
     `SELECT project_slug FROM issue_sources WHERE kind = 'jira' AND project_slug <> '' LIMIT 1`,
   );
   if (src[0]?.project_slug) return src[0].project_slug;
 
-  // 3. Search context chunks that are linked to a real project (not shared skills)
-  const prefix = key.replace(/-\d+$/, '');
-  const { rows: ctx } = await db.query<{ project_slug: string }>(
-    `SELECT c.project_slug FROM contexts c
-     JOIN projects p ON p.name = c.project_slug
-     WHERE c.content LIKE $1 LIMIT 1`,
-    [`%${prefix}-%`],
-  );
-  if (ctx[0]?.project_slug) return ctx[0].project_slug;
-
-  // 4. Last resort: first project in the DB
+  // 5. Last resort: first project in the DB (warn — likely wrong)
+  console.warn(`[project] ${key}: no component/keyword match — falling back to first project in DB`);
   const { rows: proj } = await db.query<{ name: string }>('SELECT name FROM projects LIMIT 1');
   return proj[0]?.name ?? null;
 }
