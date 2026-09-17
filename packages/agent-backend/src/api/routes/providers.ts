@@ -61,7 +61,6 @@ export async function seedDefaultProviders(): Promise<void> {
     const needsSwitch =
       active &&
       active.provider_id !== 'vertex' &&
-      active.provider_id !== 'ollama' &&
       !active.api_key;
     if (needsSwitch || !active) {
       await db.query('UPDATE llm_providers SET is_active = false, updated_at = now()');
@@ -101,8 +100,13 @@ export async function seedDefaultProviders(): Promise<void> {
   const geminiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) ?? '';
   const openaiKey = process.env.OPENAI_API_KEY ?? '';
 
-  // Prefer Vertex AI when configured, Anthropic API when key is set, else Ollama
-  const defaultActive = vertexProjectId ? 'vertex' : anthropicKey ? 'anthropic' : 'ollama';
+  const defaultActive = vertexProjectId
+    ? 'vertex'
+    : anthropicKey
+      ? 'anthropic'
+      : geminiKey
+        ? 'gemini'
+        : '';
 
   interface ProviderSeed {
     provider_id: string;
@@ -126,15 +130,6 @@ export async function seedDefaultProviders(): Promise<void> {
           },
         ]
       : []),
-    {
-      provider_id: 'ollama',
-      label: 'Ollama (local)',
-      api_key: '',
-      base_url: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
-      model: process.env.OLLAMA_MODEL ?? 'qwen2.5-coder:7b',
-      is_active: defaultActive === 'ollama',
-    },
-    // Only seed Anthropic/OpenAI/Gemini when their keys are configured
     ...(anthropicKey
       ? [
           {
@@ -167,7 +162,7 @@ export async function seedDefaultProviders(): Promise<void> {
             api_key: geminiKey,
             base_url: '',
             model: process.env.GEMINI_MODEL ?? 'gemini-3.6-flash',
-            is_active: false,
+            is_active: defaultActive === 'gemini',
           },
         ]
       : []),
