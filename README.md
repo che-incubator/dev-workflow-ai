@@ -12,7 +12,7 @@ Review runs **before** the PR is opened so only clean code is published. Bundled
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/olexii4/dev-workflow-ai
+git clone https://github.com/che-incubator/dev-workflow-ai
 cd dev-workflow-ai
 yarn install
 
@@ -157,7 +157,7 @@ Repeat for each variable (use a different `name` per secret):
 ### Step 3 — Open the workspace
 
 ```
-https://<your-che-host>/f?url=https://github.com/olexii4/dev-workflow-ai
+https://<your-che-host>/f?url=https://github.com/che-incubator/dev-workflow-ai
 ```
 
 Eclipse Che reads `devfile.yaml`, provisions the container (PGlite embedded — no sidecar), and exposes the agent UI at port 3000. The secret values are available immediately.
