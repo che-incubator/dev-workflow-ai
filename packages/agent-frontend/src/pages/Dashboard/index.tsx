@@ -22,6 +22,7 @@ import {
   DropdownList,
   EmptyState,
   EmptyStateBody,
+  EmptyStateVariant,
   Flex,
   FlexItem,
   Label,
@@ -34,7 +35,7 @@ import {
   ToolbarContent,
   ToolbarItem,
 } from '@patternfly/react-core';
-import { EllipsisVIcon, TrashIcon } from '@patternfly/react-icons';
+import { CubesIcon, EllipsisVIcon, TrashIcon } from '@patternfly/react-icons';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@patternfly/react-table';
 import type { AgentRun } from '@/services/api/runsService';
 import { formatDateTime } from '@/services/helpers/dates';
@@ -267,11 +268,13 @@ export default function DashboardPage({
                 </FlexItem>
               </Flex>
             ) : filtered.length === 0 ? (
-              <EmptyState>
+              <EmptyState
+                variant={EmptyStateVariant.sm}
+                icon={CubesIcon}
+                titleText={runs.length === 0 ? 'No runs yet.' : 'No runs match the filter.'}
+              >
                 <EmptyStateBody>
-                  {runs.length === 0
-                    ? 'No runs yet. Go to Issues to start one.'
-                    : 'No runs match the filter.'}
+                  {runs.length === 0 ? 'Go to Issues to start one.' : 'Try adjusting your filter.'}
                 </EmptyStateBody>
               </EmptyState>
             ) : (
