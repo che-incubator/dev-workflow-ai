@@ -68,12 +68,14 @@ module.exports = {
   optimization: {
     concatenateModules: false,
   },
-  // pg and @electric-sql/pglite must be external:
-  //   pg       — CJS/ESM interop issue when bundled (pg.Pool becomes undefined)
-  //   pglite   — ships a WASM binary that webpack cannot bundle
+  // Externals — modules that must NOT be bundled:
+  //   pg              — CJS/ESM interop issue when bundled (pg.Pool becomes undefined)
+  //   pglite          — ships a WASM binary that webpack cannot bundle
+  //   swagger-ui      — uses __dirname to locate its static assets (CSS/JS)
   externals: [
     'bufferutil', 'utf-8-validate', 'pg-native',
     { pg: 'commonjs pg' },
     { '@electric-sql/pglite': 'commonjs @electric-sql/pglite' },
+    { '@fastify/swagger-ui': 'commonjs @fastify/swagger-ui' },
   ],
 };

@@ -127,6 +127,8 @@ async function main() {
   console.log('  Next steps:');
   console.log('    • Start the server:  yarn start');
   console.log();
+
+  process.exit(0);
 }
 
 main().catch(e => {

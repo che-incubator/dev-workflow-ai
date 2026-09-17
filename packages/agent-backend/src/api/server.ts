@@ -90,9 +90,13 @@ export async function buildServer() {
     reply.send({ status: 'ok', ts: new Date().toISOString() }),
   );
 
-  // SPA fallback
+  // SPA fallback — only for browser navigation, not API/swagger/ws paths
   if (existsSync(distDir)) {
-    app.setNotFoundHandler((_req, reply) => {
+    app.setNotFoundHandler((req, reply) => {
+      const url = req.url;
+      if (url.startsWith('/api/') || url.startsWith('/swagger') || url.startsWith('/ws') || url === '/health') {
+        return reply.code(404).send({ error: 'Not Found' });
+      }
       reply.sendFile('index.html');
     });
   }

@@ -34,6 +34,14 @@ export function registerSwagger(server: FastifyInstance): void {
 
   server.register(fastifySwaggerUi, {
     routePrefix: ROUTE_PREFIX,
+    logo: {
+      type: 'image/svg+xml',
+      content: Buffer.from(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 24">' +
+          '<text x="0" y="18" font-family="monospace" font-size="14" fill="#333">dev-workflow-ai</text>' +
+          '</svg>',
+      ),
+    },
     uiConfig: {
       tryItOutEnabled: true,
       validatorUrl: null,

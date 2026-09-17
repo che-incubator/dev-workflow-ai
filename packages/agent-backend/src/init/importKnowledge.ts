@@ -241,7 +241,6 @@ export async function importKnowledge(
         content = parsed.content.trim() || raw;
         meta = parseMeta(parsed.data as Record<string, unknown>);
       } catch {
-        // Frontmatter parse error — store raw content, skip meta
         content = raw;
       }
     }
@@ -256,7 +255,6 @@ export async function importKnowledge(
     );
     imported++;
 
-    // Register project from frontmatter in the main context.md
     if (classified.isProjectContext && meta.repo) {
       const { rowCount } = await db.query(
         `INSERT INTO projects (name, repo, local_path, default_branch, stack, description, auto_approve_min_priority, story_point_budget, updated_at)
