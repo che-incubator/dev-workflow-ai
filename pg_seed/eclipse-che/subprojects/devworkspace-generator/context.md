@@ -1,11 +1,11 @@
 ---
-repo: che-incubator/devworkspace-generator
+repo: devfile/devworkspace-generator
 default_branch: main
 stack: [TypeScript, Node.js, Yarn]
 description: Converts Devfile v2 specs into DevWorkspace Kubernetes resources
 auto_approve_min_priority: major
 story_point_budget: 3
-local_path: .repos/che-incubator/devworkspace-generator
+local_path: .repos/devfile/devworkspace-generator
 commands:
   test: "yarn test 2>&1 | tail -30"
   lint: "yarn lint 2>&1 | tail -20"
@@ -18,7 +18,7 @@ commands:
 > Also load: context/eclipse-che-ecosystem.md
 
 Last commit: `c7c9ba247` · 2026-03-16 · chore: update devfile and add CONTRIBUTING.md
-GitHub: `che-incubator/devworkspace-generator`
+GitHub: `devfile/devworkspace-generator`
 
 ---
 

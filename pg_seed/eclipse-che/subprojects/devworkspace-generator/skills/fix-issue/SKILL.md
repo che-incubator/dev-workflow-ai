@@ -103,7 +103,7 @@ EOF
 git push -u origin issue-<ISSUE_NUM>
 
 gh pr create \
-  --repo che-incubator/devworkspace-generator \
+  --repo devfile/devworkspace-generator \
   --title "fix(devfile): short description" \
   --body "$(cat <<'EOF'
 ## What

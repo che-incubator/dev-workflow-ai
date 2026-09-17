@@ -16,7 +16,7 @@ An issue number or URL. Parse from `$ARGUMENTS`.
 
 ```bash
 ISSUE_NUM=<parse from $ARGUMENTS>
-gh issue view ${ISSUE_NUM} --repo che-incubator/devworkspace-generator \
+gh issue view ${ISSUE_NUM} --repo devfile/devworkspace-generator \
   --json number,title,body,labels,assignees,comments,state
 ```
 
@@ -77,5 +77,5 @@ If the issue requires supporting a new field or component:
 
 **Story points:** 2
 
-**IMPLEMENT_READY: che-incubator/devworkspace-generator#NNNN**
+**IMPLEMENT_READY: devfile/devworkspace-generator#NNNN**
 ```

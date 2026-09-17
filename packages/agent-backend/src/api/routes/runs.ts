@@ -89,7 +89,7 @@ const REPO_TO_PROJECT: Record<string, string> = {
   'eclipse-che/che': 'che',
   'eclipse-che/che-docs': 'che-docs',
   'che-incubator/che-ai-tool-images': 'che-ai-tool-images',
-  'che-incubator/devworkspace-generator': 'devworkspace-generator',
+  'devfile/devworkspace-generator': 'devworkspace-generator',
   'devfile/devworkspace-operator': 'devworkspace-operator',
   'che-incubator/dash-licenses': 'dash-licenses',
 };

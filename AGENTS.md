@@ -104,7 +104,7 @@ controller.devfile.io/mount-as: env
 | che-server | eclipse-che/che-server | /projects/repos/eclipse-che/che-server | Java, Maven |
 | che-docs | eclipse-che/che-docs | /projects/repos/eclipse-che/che-docs | AsciiDoc, Antora |
 | che-ai-tool-images | che-incubator/che-ai-tool-images | /projects/repos/che-incubator/che-ai-tool-images | Dockerfile |
-| devworkspace-generator | che-incubator/devworkspace-generator | /projects/repos/devworkspace-generator | TypeScript |
+| devworkspace-generator | devfile/devworkspace-generator | /projects/repos/devworkspace-generator | TypeScript |
 | devworkspace-operator | devfile/devworkspace-operator | /projects/repos/devfile/devworkspace-operator | Go, Operator SDK |
 | dash-licenses | che-incubator/dash-licenses | /projects/repos/che-incubator/dash-licenses | Java, Maven |
 

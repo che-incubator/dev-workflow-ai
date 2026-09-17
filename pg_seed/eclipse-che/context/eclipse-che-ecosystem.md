@@ -74,7 +74,7 @@ Pre-loaded context for the dev-workflow-ai bot. Describes the structure, purpose
 
 | Property | Value |
 |---|---|
-| GitHub | che-incubator/devworkspace-generator |
+| GitHub | devfile/devworkspace-generator |
 | Stack | TypeScript, Node.js |
 | Last commit | `c7c9ba2478` · 2026-03-16 · chore: update devfile and add CONTRIBUTING.md |
 | Key dirs | `src/` (generator logic), `tests/` |

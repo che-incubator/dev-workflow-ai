@@ -69,7 +69,7 @@
       ]
     },
     "devworkspace-generator": {
-      "repo": "che-incubator/devworkspace-generator",
+      "repo": "devfile/devworkspace-generator",
       "local_path": "/Users/oleksiiorel/workspace/devfile/devworkspace-generator",
       "context": "subprojects/devworkspace-generator/context.md",
       "rules": "subprojects/devworkspace-generator/rules/dev.md",

@@ -16,8 +16,8 @@ A PR number or URL. Parse from `$ARGUMENTS`.
 
 ```bash
 PR_NUM=<parse from $ARGUMENTS>
-gh pr diff ${PR_NUM} --repo che-incubator/devworkspace-generator
-gh pr view ${PR_NUM} --repo che-incubator/devworkspace-generator --json title,body,files
+gh pr diff ${PR_NUM} --repo devfile/devworkspace-generator
+gh pr view ${PR_NUM} --repo devfile/devworkspace-generator --json title,body,files
 ```
 
 ### 2. Tier 1 — Always check
@@ -25,7 +25,7 @@ gh pr view ${PR_NUM} --repo che-incubator/devworkspace-generator --json title,bo
 #### No `any` type (BLOCKING)
 
 ```bash
-gh pr diff ${PR_NUM} --repo che-incubator/devworkspace-generator | grep "^\+" | grep -E "\bany\b"
+gh pr diff ${PR_NUM} --repo devfile/devworkspace-generator | grep "^\+" | grep -E "\bany\b"
 ```
 
 Any `any` type in added lines = **BLOCKING**.
@@ -33,7 +33,7 @@ Any `any` type in added lines = **BLOCKING**.
 #### EPL-2.0 header in new .ts files (BLOCKING)
 
 ```bash
-gh api repos/che-incubator/devworkspace-generator/pulls/${PR_NUM}/files \
+gh api repos/devfile/devworkspace-generator/pulls/${PR_NUM}/files \
   --jq '.[] | select(.status == "added") | .filename' | grep "\.ts$"
 ```
 
@@ -46,7 +46,7 @@ For each changed `.ts` file (not `.spec.ts`), check if a corresponding `.spec.ts
 #### yarn license:generate if package.json changed (BLOCKING)
 
 ```bash
-gh api repos/che-incubator/devworkspace-generator/pulls/${PR_NUM}/files \
+gh api repos/devfile/devworkspace-generator/pulls/${PR_NUM}/files \
   --jq '.[].filename' | grep "package\.json"
 ```
 
