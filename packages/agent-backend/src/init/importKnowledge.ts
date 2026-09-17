@@ -18,6 +18,11 @@
  * This makes the system fully universal: add a new project by creating
  * subprojects/<slug>/context.md with frontmatter — no code changes needed.
  *
+ * Issue sources are collected from three places (additive, never auto-deleted):
+ *   1. projects.json → issue_sources array
+ *   2. shared/sources.md → YAML frontmatter issue_sources array
+ *   3. subprojects/<slug>/context.md → issue_source field
+ *
  * Frontmatter schema (in subprojects/<slug>/context.md):
  *   repo:                      eclipse-che/che-dashboard
  *   stack:                     [TypeScript, React 18, PatternFly 6]
@@ -142,11 +147,41 @@ export async function importKnowledge(
   let projectsRegistered = 0;
   let sourcesRegistered = 0;
 
-  // Collect all issue_source URLs defined in this knowledge directory before
-  // upserting — then delete any stale DB rows that are no longer configured.
-  const configuredSourceUrls = new Set<string>();
+  // Collect and upsert issue sources from shared/sources.md and projects.json.
+  // Sources are only added (ON CONFLICT DO NOTHING), never auto-deleted —
+  // users can remove sources manually through the UI.
+  const sourceUrls = new Set<string>();
 
-  // 1. Collect per-project issue_source from subprojects/*/context.md
+  // 1. shared/sources.md (YAML frontmatter)
+  try {
+    const sharedRaw = await readFile(join(effectiveDir, 'shared', 'sources.md'), 'utf8');
+    const sharedParsed = matter(sharedRaw);
+    const urls = (sharedParsed.data as Record<string, unknown>).issue_sources;
+    const list = Array.isArray(urls)
+      ? (urls as unknown[]).map(String)
+      : typeof urls === 'string'
+        ? [urls]
+        : [];
+    for (const u of list) {
+      if (u) sourceUrls.add(u);
+    }
+  } catch {
+    /* file doesn't exist — non-fatal */
+  }
+
+  // 2. projects.json issue_sources array
+  try {
+    const projRaw = await readFile(join(effectiveDir, 'projects.json'), 'utf8');
+    const projParsed = JSON.parse(projRaw);
+    const projSources = Array.isArray(projParsed.issue_sources) ? projParsed.issue_sources : [];
+    for (const u of projSources as string[]) {
+      if (u) sourceUrls.add(u);
+    }
+  } catch {
+    /* projects.json not found — non-fatal */
+  }
+
+  // 3. Per-project issue_source from subprojects/*/context.md frontmatter
   for (const fp of allFiles) {
     const rel = relative(effectiveDir, fp);
     const cl = classifyFile(rel);
@@ -156,11 +191,7 @@ export async function importKnowledge(
         const parsed2 = matter(raw2);
         const src = (parsed2.data as Record<string, unknown>).issue_source;
         if (typeof src === 'string' && src) {
-          // Only strip query/fragment from GitHub URLs; preserve Jira URLs as-is
-          const cleanUrl = src.includes('github.com')
-            ? src.replace(/\/(issues|pulls)\/?$/, '').replace(/[?#].*$/, '')
-            : src;
-          configuredSourceUrls.add(cleanUrl);
+          sourceUrls.add(src);
         }
       } catch {
         /* ignore */
@@ -168,43 +199,7 @@ export async function importKnowledge(
     }
   }
 
-  // 2. Collect shared issue_sources from shared/sources.md (array of URLs)
-  const sharedSourcesFile = join(effectiveDir, 'shared', 'sources.md');
-  const sharedSourcesList: string[] = [];
-  try {
-    const sharedRaw = await readFile(sharedSourcesFile, 'utf8');
-    const sharedParsed = matter(sharedRaw);
-    const urls = (sharedParsed.data as Record<string, unknown>).issue_sources;
-    const list = Array.isArray(urls)
-      ? (urls as unknown[]).map(String)
-      : typeof urls === 'string'
-        ? [urls]
-        : [];
-    for (const u of list) {
-      if (u) {
-        configuredSourceUrls.add(u);
-        sharedSourcesList.push(u);
-      }
-    }
-  } catch {
-    /* file doesn't exist — no shared sources configured */
-  }
-
-  // Remove sources that are no longer in the knowledge files
-  if (configuredSourceUrls.size > 0) {
-    await db
-      .query(
-        `DELETE FROM issue_sources WHERE url NOT IN (${[...configuredSourceUrls].map((_, i) => `$${i + 1}`).join(',')})`,
-        [...configuredSourceUrls],
-      )
-      .catch(() => {}); // non-fatal if table doesn't exist yet
-  } else {
-    // No sources defined in this import → clear all (full reset)
-    await db.query('DELETE FROM issue_sources').catch(() => {});
-  }
-
-  // Upsert shared sources so they exist even before sync
-  for (const url of sharedSourcesList) {
+  for (const url of sourceUrls) {
     const isJira =
       url.includes('atlassian.net') || url.includes('/jira/') || url.includes('/browse/');
     const label = url.includes('/jira/for-you')
