@@ -23,6 +23,8 @@ yarn start           # run the built API server (port 3000)
 yarn start:frontend  # webpack frontend dev server (port 5173)
 yarn start:watch     # dev mode — tsx hot-reload, no build needed
 yarn test            # vitest run
+./docs/build.sh      # build Antora docs → build/site/
+./docs/build.sh --serve  # build and serve docs on port 4000
 ```
 
 ## Knowledge Pack Structure

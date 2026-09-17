@@ -34,6 +34,12 @@ dev-workflow-ai/
 │   ├── shared/skills/               ← run-loop, pick-issue, filter-issues, batch-cve-fix
 │   └── subprojects/<name>/          ← Per-project context, rules, skills
 │       └── che-dashboard/           ← context.md, rules/dev.md, skills/fix-cve-dep, …
+├── docs/                            ← Antora documentation site (AsciiDoc)
+│   ├── antora.yml                   ← Component descriptor
+│   ├── antora-playbook.yml          ← Antora playbook (build config)
+│   ├── build.sh                     ← Build and serve script (--serve for local preview)
+│   ├── supplemental-ui/             ← Custom header, footer, partials
+│   └── modules/                     ← ROOT, getting-started, usage, architecture, development, deployment
 ├── run/
 │   ├── deploy-ocp.sh                ← Deploy to OpenShift using the pre-built image
 │   └── run-local-podman.sh          ← Run locally with Podman (pulls pre-built image)
@@ -53,6 +59,8 @@ yarn start           # run the built API server (port 3000)
 yarn start:frontend  # webpack frontend dev server (port 5173)
 yarn start:watch     # dev mode — tsx hot-reload, no build needed
 yarn test            # vitest
+./docs/build.sh      # build Antora docs → build/site/
+./docs/build.sh --serve  # build and serve docs on port 4000
 ```
 
 API docs: http://localhost:3000/swagger

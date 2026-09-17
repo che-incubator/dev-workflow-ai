@@ -169,6 +169,17 @@ echo $ANTHROPIC_VERTEX_PROJECT_ID
 
 ---
 
+## Documentation
+
+The project documentation is built with [Antora](https://antora.org/) from AsciiDoc sources in `docs/`.
+
+```bash
+./docs/build.sh          # build → build/site/
+./docs/build.sh --serve  # build and serve on http://localhost:4000
+```
+
+---
+
 ## Development
 
 ```bash

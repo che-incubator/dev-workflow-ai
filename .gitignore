@@ -24,6 +24,8 @@ dist/
 
 # Build outputs
 packages/agent-backend/lib/
+build/
+.cache/
 .npm/
 
 # Auth allowlist — local config, not committed

@@ -38,7 +38,8 @@ Shared skills live in `shared/skills/<name>/SKILL.md` and are mirrored to `.clau
 - **Issue selection**: Only open issues. Skip any with labels: `wontfix`, `duplicate`, `stale`, `lifecycle/stale`, `needs-triage`, `blocked`. Skip `[Validate]` title issues (validation tickets, not implementation).
 - **EPL-2.0 only**: All contributed code must be license-compatible with EPL-2.0. Never introduce code from incompatible licenses.
 - **No `any` type**: In TypeScript projects (che-dashboard, devworkspace-generator), never use `any` or cast to `any`.
-- **Backend bundle**: `packages/agent-backend` outputs `index.cjs` (not `.js`). `pg` and `@electric-sql/pglite` are in webpack `externals` — do not move them into the bundle.
+- **Backend bundle**: `packages/agent-backend` outputs `index.cjs` (not `.js`). `pg` and `@electric-sql/pglite` are in webpack `externals` — do not move them into the bundle. `tsconfig.webpack.json` must keep `esModuleInterop: true` — CJS modules like `gray-matter` break without it.
 - **Database backend**: `db/client.ts` auto-selects: `DATABASE_URL` set → `pg.Pool` (real Postgres); unset → PGlite (Postgres-in-WASM, no server). For local testing without a postgres sidecar, just omit `DATABASE_URL`. Set `PGLITE_DATA_DIR=/app/data` for persistence.
+- **Documentation**: Antora site lives in `docs/`. Playbook is `docs/antora-playbook.yml`. Build with `./docs/build.sh`. Supplemental UI overrides are in `docs/supplemental-ui/partials/`. Uses Antora 2.x — no extensions, attributes go in the playbook, version must be explicit (not `~`).
 - **Local run entry point**: `run/run-local-podman.sh` — pulls and starts the pre-built app image with a Podman pod.
 - **Postgres in OpenShift**: always set `PGDATA=/tmp/pgdata` on the postgres sidecar container. The default data dir (`/var/lib/postgresql/data`) is owned by UID 70 and inaccessible to OpenShift's assigned UID.
