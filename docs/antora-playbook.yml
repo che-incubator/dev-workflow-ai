@@ -2,6 +2,10 @@ site:
   title: Autonomous AI Software Engineer (dev-workflow-ai) documentation
   start_page: docs::index.adoc
 
+antora:
+  extensions:
+    - '@antora/lunr-extension'
+
 content:
   sources:
     - url: ../

@@ -57,6 +57,9 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@antora/cli": "^3.2.0",
+    "@antora/lunr-extension": "^1.0.0-alpha.13",
+    "@antora/site-generator": "^3.2.0",
     "@eclipse-che/license-tool": "^2.0.1-next.7742774",
     "@eslint/js": "^9.0.0",
     "@testing-library/dom": "^10.4.2",
