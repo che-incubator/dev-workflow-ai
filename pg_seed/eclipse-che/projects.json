@@ -1,4 +1,8 @@
 {
+  "issue_sources": [
+    "https://redhat.atlassian.net/jira/for-you?tab=assigned",
+    "https://github.com/eclipse-che/che/issues"
+  ],
   "projects": {
     "che-dashboard": {
       "repo": "eclipse-che/che-dashboard",
