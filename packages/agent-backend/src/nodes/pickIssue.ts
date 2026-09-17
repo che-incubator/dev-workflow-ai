@@ -11,7 +11,7 @@
  */
 
 import { HumanMessage } from '@langchain/core/messages';
-import { llm } from '../llm/client.js';
+import { llm, logTokenUsage } from '../llm/client.js';
 import { loadProjectConfig } from '../context/loader.js';
 import { State } from '../agent/state.js';
 
@@ -94,6 +94,7 @@ After selecting an issue, respond with ONLY valid JSON in this exact format (no 
 `;
 
   const response = await llm.invoke([new HumanMessage(prompt)]);
+  logTokenUsage('pick_issue', response);
   let text: string;
   if (typeof response.content === 'string') {
     text = response.content;

@@ -12,7 +12,7 @@
 
 import { HumanMessage } from '@langchain/core/messages';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { llmDeep as llm } from '../llm/client.js';
+import { llmDeep as llm, logTokenUsage } from '../llm/client.js';
 import { getAnthropicClient } from '../llm/anthropicClient.js';
 import { nodeLog } from '../agent/runner.js';
 import { loadContext } from '../context/loader.js';
@@ -134,6 +134,7 @@ Respond with ONLY valid JSON, no markdown fences, no explanation:
     // Fallback: LangChain (Gemini / Ollama / other providers)
     const pureLlm = buildPureLLM();
     const response = await pureLlm.invoke([new HumanMessage(prompt)]);
+    logTokenUsage('analyze', response);
     if (typeof response.content === 'string') {
       text = response.content;
     } else if (Array.isArray(response.content)) {

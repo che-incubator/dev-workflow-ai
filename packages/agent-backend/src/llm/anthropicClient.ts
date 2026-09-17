@@ -24,6 +24,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { emitTokenLog } from './tokenLog.js';
 
 const _THINKING = process.env.CLAUDE_THINKING !== 'false'; // reserved for direct API path
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
@@ -113,7 +114,7 @@ export class AnthropicClient {
     const out = data.usage?.output_tokens ?? 0;
     this.totalInputTokens += inp;
     this.totalOutputTokens += out;
-    console.log(
+    emitTokenLog(
       `[tokens] ${this.model} ask: ↑${inp} ↓${out} (total: ↑${this.totalInputTokens} ↓${this.totalOutputTokens})`,
     );
     return data.content
@@ -144,7 +145,7 @@ export class AnthropicClient {
     const out = msg.usage.output_tokens;
     this.totalInputTokens += inp;
     this.totalOutputTokens += out;
-    console.log(
+    emitTokenLog(
       `[tokens] ${this.model} ask: ↑${inp} ↓${out} (total: ↑${this.totalInputTokens} ↓${this.totalOutputTokens})`,
     );
     return extractText(msg.content);
@@ -188,7 +189,7 @@ export class AnthropicClient {
     const out = msg.usage.output_tokens;
     this.totalInputTokens += inp;
     this.totalOutputTokens += out;
-    console.log(
+    emitTokenLog(
       `[tokens] ${this.model} stream: ↑${inp} ↓${out} (total: ↑${this.totalInputTokens} ↓${this.totalOutputTokens})`,
     );
     callbacks.onInputTokens?.(inp);

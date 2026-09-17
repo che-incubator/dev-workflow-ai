@@ -11,7 +11,7 @@
  */
 
 import { HumanMessage } from '@langchain/core/messages';
-import { llmDeep as llm } from '../llm/client.js';
+import { llmDeep as llm, logTokenUsage } from '../llm/client.js';
 import { getAnthropicClient } from '../llm/anthropicClient.js';
 import { nodeLog } from '../agent/runner.js';
 import { loadProjectConfig } from '../context/loader.js';
@@ -73,6 +73,7 @@ After completing, respond with JSON only:
   } else {
     // Fallback: LangChain for non-Anthropic providers
     const response = await llm.invoke([new HumanMessage(prompt)]);
+    logTokenUsage('fix_feedback', response);
     if (typeof response.content === 'string') {
       text = response.content;
     } else if (Array.isArray(response.content)) {

@@ -23,6 +23,7 @@
 //   GOOGLE_APPLICATION_CREDENTIALS      — path to service account JSON file (file-based)
 
 import { readFileSync } from 'node:fs';
+import { emitTokenLog } from './tokenLog.js';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type {
   BaseChatModelCallOptions,
@@ -307,7 +308,7 @@ export class VertexAnthropicLLM extends BaseChatModel {
     this.totalInputTokens += inp;
     this.totalOutputTokens += out;
     if (inp || out) {
-      console.log(
+      emitTokenLog(
         `[tokens] ${this.model} vertex: ↑${inp} ↓${out} (total: ↑${this.totalInputTokens} ↓${this.totalOutputTokens})`,
       );
     }

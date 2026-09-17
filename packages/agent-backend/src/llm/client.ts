@@ -232,6 +232,8 @@ export const llmDeep = (deepBase as any).bindTools(allTools) as BaseChatModel;
 
 // ── Token usage tracking for LangChain responses ─────────────────────────
 
+import { emitTokenLog } from './tokenLog.js';
+
 let _totalInputTokens = 0;
 let _totalOutputTokens = 0;
 
@@ -247,7 +249,7 @@ export function logTokenUsage(
   if (inp || out) {
     _totalInputTokens += inp;
     _totalOutputTokens += out;
-    console.log(
+    emitTokenLog(
       `[tokens] ${node}: ↑${inp} ↓${out} (total: ↑${_totalInputTokens} ↓${_totalOutputTokens})`,
     );
   }

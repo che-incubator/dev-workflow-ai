@@ -28,7 +28,7 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { resolve } from 'node:path';
 import { HumanMessage } from '@langchain/core/messages';
-import { llmDeep as llm } from '../llm/client.js';
+import { llmDeep as llm, logTokenUsage } from '../llm/client.js';
 import { getAnthropicClient } from '../llm/anthropicClient.js';
 import { nodeLog } from '../agent/runner.js';
 import { loadContext, loadProjectConfig } from '../context/loader.js';
@@ -84,6 +84,7 @@ async function runReviewer(
     } else {
       // Fallback: LangChain for non-Anthropic providers
       const response = await llm.invoke([new HumanMessage(prompt)]);
+      logTokenUsage(`review:${name}`, response);
       if (typeof response.content === 'string') {
         text = response.content;
       } else if (Array.isArray(response.content)) {
