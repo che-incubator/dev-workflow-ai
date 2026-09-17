@@ -121,6 +121,10 @@ export function startAutorunScheduler(): void {
       if (hhmm === lastTriggeredAt) return;
       if (!times.includes(hhmm)) return;
 
+      const daysStr = await getSetting('autorunDays', '1,2,3,4,5');
+      const activeDays = daysStr.split(',').map(d => parseInt(d.trim(), 10)).filter(d => !isNaN(d));
+      if (!activeDays.includes(now.getDay())) return;
+
       lastTriggeredAt = hhmm;
       console.log(`[autorun] Scheduled trigger at ${hhmm}`);
       await triggerAutorun();

@@ -14,13 +14,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Button,
   Card,
+  Checkbox,
   CardBody,
   CardTitle,
-  DataList,
-  DataListCell,
-  DataListItem,
-  DataListItemCells,
-  DataListItemRow,
   Divider,
   Dropdown,
   DropdownItem,
@@ -34,7 +30,6 @@ import {
   FlexItem,
   Form,
   FormGroup,
-  FormGroupLabelHelp,
   Label,
   MenuToggle,
   Modal,
@@ -58,13 +53,9 @@ import { useAlerts } from '../contexts/AlertContext.js';
 import {
   AppSettings,
   LLMProvider,
-  SamplePack,
   deleteProvider,
-  exportKnowledge,
   getProviders,
   getSettings,
-  getSamplePacks,
-  loadSamplePack,
   ProviderHealthResult,
   saveSettings,
   testAllProviders,
@@ -975,124 +966,6 @@ function AIProviders({
   );
 }
 
-// ── Knowledge Sources ──────────────────────────────────────────────────────
-
-function KnowledgeSources() {
-  const [samples, setSamples] = useState<SamplePack[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState<string | null>(null);
-  const { addAlert } = useAlerts();
-
-  useEffect(() => {
-    getSamplePacks()
-      .then(setSamples)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleLoad = async (name: string) => {
-    setImporting(name);
-    try {
-      const r = await loadSamplePack(name);
-      addAlert('success', `Loaded '${r.sample}': ${r.imported} files, ${r.projects} projects`);
-    } catch (e) {
-      addAlert('danger', e instanceof Error ? e.message : String(e));
-    } finally {
-      setImporting(null);
-    }
-  };
-
-  return (
-    <PageSection>
-      <Card>
-        <CardTitle>
-          Knowledge Sources
-          <p style={WIDGET_DESC}>
-            Project knowledge packs from <code>pg_seed/</code> — load them into the database so the
-            agent can read project context and skills.
-          </p>
-        </CardTitle>
-        <CardBody>
-          {loading ? (
-            <Spinner size="sm" aria-label="Loading samples" />
-          ) : samples.length === 0 ? (
-            <EmptyState
-              variant={EmptyStateVariant.sm}
-              icon={CubesIcon}
-              titleText="No knowledge packs"
-            >
-              <EmptyStateBody>
-                <Popover bodyContent="No directories found in pg_seed/. Create one like pg_seed/my-project/ with subprojects/, context/, and shared/ subdirectories, then restart the server.">
-                  <FormGroupLabelHelp aria-label="More info" />
-                </Popover>
-              </EmptyStateBody>
-            </EmptyState>
-          ) : (
-            <DataList aria-label="Sample packs" isCompact>
-              {samples.map(s => (
-                <DataListItem key={s.name} aria-labelledby={`sample-${s.name}`}>
-                  <DataListItemRow>
-                    <DataListItemCells
-                      dataListCells={[
-                        <DataListCell key="name" width={2} id={`sample-${s.name}`}>
-                          <strong>{s.name}</strong>
-                          <div style={{ marginTop: '4px' }}>
-                            {s.hasSubprojects && (
-                              <Label isCompact style={{ marginRight: '4px' }}>
-                                subprojects
-                              </Label>
-                            )}
-                            {s.hasContext && (
-                              <Label isCompact style={{ marginRight: '4px' }}>
-                                context
-                              </Label>
-                            )}
-                            {s.hasShared && <Label isCompact>shared</Label>}
-                          </div>
-                        </DataListCell>,
-                        <DataListCell key="subdirs" width={3}>
-                          <span
-                            style={{
-                              fontSize: '0.85rem',
-                              color: 'var(--pf-t--global--text--color--subtle)',
-                            }}
-                          >
-                            {s.subdirs.join(' · ')}
-                          </span>
-                        </DataListCell>,
-                        <DataListCell key="action" width={2} alignRight>
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            isDisabled={importing !== null}
-                            onClick={() => handleLoad(s.name)}
-                          >
-                            {importing === s.name ? (
-                              <>
-                                <Spinner size="sm" aria-label="Loading" /> Loading…
-                              </>
-                            ) : (
-                              '↓ Load into DB'
-                            )}
-                          </Button>
-                        </DataListCell>,
-                      ]}
-                    />
-                  </DataListItemRow>
-                </DataListItem>
-              ))}
-            </DataList>
-          )}
-
-          <Divider style={{ margin: '12px 0 8px' }} />
-          <Button variant="link" size="sm" onClick={exportKnowledge}>
-            Export to JSON
-          </Button>
-        </CardBody>
-      </Card>
-    </PageSection>
-  );
-}
 
 // ── Main Settings page ─────────────────────────────────────────────────────
 
@@ -1114,10 +987,20 @@ function AutorunWidget({
         .map(t => t.trim())
         .filter(Boolean)
     : [];
+  const days = (settings.autorunDays || '1,2,3,4,5')
+    .split(',')
+    .map(d => parseInt(d.trim(), 10))
+    .filter(d => !isNaN(d));
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
   const [starting, setStarting] = React.useState(false);
 
   function setTimes(newTimes: string[]) {
     set({ autorunTimes: newTimes.join(',') });
+  }
+
+  function toggleDay(day: number) {
+    const next = days.includes(day) ? days.filter(d => d !== day) : [...days, day].sort();
+    set({ autorunDays: next.join(',') });
   }
 
   function addTime() {
@@ -1210,6 +1093,27 @@ function AutorunWidget({
               </FlexItem>
             )}
 
+            {/* Days of week */}
+            {enabled && (
+              <FlexItem>
+                <span style={{ fontWeight: 500, fontSize: '0.9rem', marginBottom: '4px', display: 'block' }}>
+                  Active days:
+                </span>
+                <Flex gap={{ default: 'gapSm' }}>
+                  {dayLabels.map((label, idx) => (
+                    <FlexItem key={idx}>
+                      <Checkbox
+                        id={`autorun-day-${idx}`}
+                        label={label}
+                        isChecked={days.includes(idx)}
+                        onChange={() => toggleDay(idx)}
+                      />
+                    </FlexItem>
+                  ))}
+                </Flex>
+              </FlexItem>
+            )}
+
             {/* Force start */}
             <FlexItem>
               <Button
@@ -1242,6 +1146,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   outputDir: 'output',
   autorunEnabled: 'false',
   autorunTimes: '',
+  autorunDays: '1,2,3,4,5',
 };
 
 export default function Settings() {
@@ -1490,7 +1395,6 @@ export default function Settings() {
         </Flex>
       </PageSection>
 
-      <KnowledgeSources />
     </>
   );
 }

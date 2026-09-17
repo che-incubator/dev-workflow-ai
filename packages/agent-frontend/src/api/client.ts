@@ -288,32 +288,10 @@ export interface AppSettings {
   outputDir: string;
   autorunEnabled: string; // 'true' | 'false'
   autorunTimes: string; // comma-separated HH:MM list e.g. "09:00,14:00"
+  autorunDays: string; // comma-separated day numbers 0-6 (0=Sun) e.g. "1,2,3,4,5"
   [key: string]: string;
-}
-
-export interface SamplePack {
-  name: string;
-  subdirs: string[];
-  hasSubprojects: boolean;
-  hasContext: boolean;
-  hasShared: boolean;
-}
-
-export interface LoadResult {
-  ok: boolean;
-  sample: string;
-  path: string;
-  imported: number;
-  projects: number;
-  sources: number;
 }
 
 export const getSettings = () => apiFetch<AppSettings>('/settings');
 export const saveSettings = (body: Partial<AppSettings>) =>
   apiFetch<{ ok: boolean }>('/settings', { method: 'PUT', body: JSON.stringify(body) });
-export const getSamplePacks = () => apiFetch<SamplePack[]>('/settings/samples');
-export const loadSamplePack = (name: string) =>
-  apiFetch<LoadResult>(`/settings/samples/${name}/load`, { method: 'POST' });
-export const exportKnowledge = () => {
-  window.open('/api/settings/export', '_blank');
-};
