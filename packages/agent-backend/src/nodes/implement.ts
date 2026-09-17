@@ -21,7 +21,7 @@
  */
 
 import { HumanMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
-import { llmDeep as llm } from '../llm/client.js';
+import { llmDeep as llm, logTokenUsage } from '../llm/client.js';
 import { loadContext, loadProjectConfig } from '../context/loader.js';
 import { State } from '../agent/state.js';
 import {
@@ -166,6 +166,8 @@ async function runAgentLoop(
     const response = await llm.invoke(messages, { system: systemPrompt } as Parameters<
       typeof llm.invoke
     >[1]);
+
+    logTokenUsage('implement', response as AIMessage);
 
     let textContent: string;
     if (typeof response.content === 'string') {

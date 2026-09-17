@@ -43,6 +43,9 @@ export class AnthropicClient {
   readonly maxTokens: number;
   readonly thinking: boolean;
 
+  totalInputTokens = 0;
+  totalOutputTokens = 0;
+
   // Vertex AI path — when set, requests go to Vertex rawPredict instead of direct API
   private vertexProjectId?: string;
   private vertexRegion?: string;
@@ -102,7 +105,17 @@ export class AnthropicClient {
       const err = await res.text();
       throw new Error(`[vertex] ${res.status} ${res.statusText}: ${err}`);
     }
-    const data = (await res.json()) as { content: Array<{ type: string; text?: string }> };
+    const data = (await res.json()) as {
+      content: Array<{ type: string; text?: string }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
+    const inp = data.usage?.input_tokens ?? 0;
+    const out = data.usage?.output_tokens ?? 0;
+    this.totalInputTokens += inp;
+    this.totalOutputTokens += out;
+    console.log(
+      `[tokens] ${this.model} ask: ↑${inp} ↓${out} (total: ↑${this.totalInputTokens} ↓${this.totalOutputTokens})`,
+    );
     return data.content
       .filter(b => b.type === 'text')
       .map(b => b.text ?? '')
@@ -127,6 +140,13 @@ export class AnthropicClient {
         : {}),
     };
     const msg = await this.sdk.messages.create(params);
+    const inp = msg.usage.input_tokens;
+    const out = msg.usage.output_tokens;
+    this.totalInputTokens += inp;
+    this.totalOutputTokens += out;
+    console.log(
+      `[tokens] ${this.model} ask: ↑${inp} ↓${out} (total: ↑${this.totalInputTokens} ↓${this.totalOutputTokens})`,
+    );
     return extractText(msg.content);
   }
 
@@ -164,7 +184,14 @@ export class AnthropicClient {
     }
 
     const msg = await streamObj.finalMessage();
-    callbacks.onInputTokens?.(msg.usage.input_tokens);
+    const inp = msg.usage.input_tokens;
+    const out = msg.usage.output_tokens;
+    this.totalInputTokens += inp;
+    this.totalOutputTokens += out;
+    console.log(
+      `[tokens] ${this.model} stream: ↑${inp} ↓${out} (total: ↑${this.totalInputTokens} ↓${this.totalOutputTokens})`,
+    );
+    callbacks.onInputTokens?.(inp);
     return msg;
   }
 }

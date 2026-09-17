@@ -18,7 +18,7 @@ import { promisify } from 'node:util';
 import { State } from '../agent/state.js';
 import { loadContext, loadProjectConfig } from '../context/loader.js';
 import { getSetting } from '../db/settingsHelper.js';
-import { llmDeep } from '../llm/client.js';
+import { llmDeep, logTokenUsage } from '../llm/client.js';
 import { HumanMessage } from '@langchain/core/messages';
 
 const execAsync = promisify(exec);
@@ -72,6 +72,7 @@ ${context}
 Respond with ONLY the section content (no heading, no markdown code fences).`,
       ),
     ]);
+    logTokenUsage('openPr', resp);
     const text = typeof resp.content === 'string' ? resp.content : JSON.stringify(resp.content);
     if (text.trim()) whatItDoes = text.trim();
   } catch {

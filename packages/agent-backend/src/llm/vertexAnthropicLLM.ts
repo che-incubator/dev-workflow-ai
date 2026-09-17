@@ -211,6 +211,8 @@ export class VertexAnthropicLLM extends BaseChatModel {
   protected model: string;
   protected maxTokens: number;
   private _boundTools: LangChainTool[] = [];
+  totalInputTokens = 0;
+  totalOutputTokens = 0;
 
   static lc_name(): string {
     return 'VertexAnthropicLLM';
@@ -248,6 +250,8 @@ export class VertexAnthropicLLM extends BaseChatModel {
     });
     bound.auth = this.auth;
     bound._boundTools = tools;
+    bound.totalInputTokens = this.totalInputTokens;
+    bound.totalOutputTokens = this.totalOutputTokens;
     return bound;
   }
 
@@ -298,6 +302,15 @@ export class VertexAnthropicLLM extends BaseChatModel {
     }
 
     const data = (await response.json()) as AnthropicResponse;
+    const inp = data.usage?.input_tokens ?? 0;
+    const out = data.usage?.output_tokens ?? 0;
+    this.totalInputTokens += inp;
+    this.totalOutputTokens += out;
+    if (inp || out) {
+      console.log(
+        `[tokens] ${this.model} vertex: ↑${inp} ↓${out} (total: ↑${this.totalInputTokens} ↓${this.totalOutputTokens})`,
+      );
+    }
     return fromAnthropicResponse(data);
   }
 }

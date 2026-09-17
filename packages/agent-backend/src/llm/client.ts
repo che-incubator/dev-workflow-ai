@@ -229,3 +229,26 @@ const deepBase = buildEnvLLM();
 export const llm = (fastBase as any).bindTools(allTools) as BaseChatModel;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const llmDeep = (deepBase as any).bindTools(allTools) as BaseChatModel;
+
+// ── Token usage tracking for LangChain responses ─────────────────────────
+
+let _totalInputTokens = 0;
+let _totalOutputTokens = 0;
+
+export function logTokenUsage(
+  node: string,
+  response: { response_metadata?: Record<string, unknown> },
+): void {
+  const meta = response.response_metadata as
+    | { usage?: { input_tokens?: number; output_tokens?: number; prompt_tokens?: number; completion_tokens?: number } }
+    | undefined;
+  const inp = meta?.usage?.input_tokens ?? meta?.usage?.prompt_tokens ?? 0;
+  const out = meta?.usage?.output_tokens ?? meta?.usage?.completion_tokens ?? 0;
+  if (inp || out) {
+    _totalInputTokens += inp;
+    _totalOutputTokens += out;
+    console.log(
+      `[tokens] ${node}: ↑${inp} ↓${out} (total: ↑${_totalInputTokens} ↓${_totalOutputTokens})`,
+    );
+  }
+}
