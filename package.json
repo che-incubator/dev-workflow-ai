@@ -15,7 +15,7 @@
     ]
   },
   "scripts": {
-    "build": "yarn workspaces foreach -A run build",
+    "build": "yarn workspaces foreach -A run build && bash docs/build.sh",
     "prepare:db": "bash scripts/init-db.sh",
     "start": "node packages/agent-backend/lib/server/index.cjs",
     "start:watch": "bash scripts/dev-api.sh",
