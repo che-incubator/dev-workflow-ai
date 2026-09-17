@@ -1,0 +1,81 @@
+:_content-type: CONCEPT
+:description: Architecture overview — LangGraph agent loop, backend and frontend structure, and how the pieces fit together.
+:keywords: architecture, LangGraph, agent, backend, frontend, overview
+:navtitle: Architecture overview
+
+[id="architecture-overview"]
+= Architecture overview
+
+[role="_abstract"]
+{prod} is a monorepo with two packages: a Fastify backend that runs the LangGraph agent and a React frontend for monitoring and configuration.
+
+== Repository layout
+
+----
+dev-workflow-ai/
+├── packages/
+│   ├── agent-backend/src/        ← Fastify + LangGraph + PostgreSQL
+│   │   ├── agent/                ← LangGraph graph definition, state
+│   │   ├── api/routes/           ← REST API endpoints
+│   │   ├── db/                   ← migrations, schema, PGlite client
+│   │   ├── init/                 ← importKnowledge, seedSources
+│   │   ├── llm/                  ← LLM client abstraction
+│   │   ├── nodes/                ← agent nodes (analyze, implement, review, openPr)
+│   │   ├── scheduler/            ← daily autorun scheduler
+│   │   └── utils/                ← repoLock (per-repo mutex)
+│   └── agent-frontend/src/       ← React + PatternFly 6 + Redux Toolkit
+│       ├── pages/                ← page components (Runtime, Issues, Projects, Settings)
+│       ├── store/                ← Redux slices
+│       └── api/                  ← API client
+├── pg_seed/eclipse-che/          ← knowledge packs
+├── scripts/                      ← init-db, dev helpers
+└── run/                          ← deployment scripts
+----
+
+== Agent pipeline
+
+The LangGraph agent follows a linear pipeline with a feedback loop:
+
+----
+ ┌──────────┐    ┌─────────────┐    ┌────────┐    ┌──────────┐    ┌─────────┐
+ │ Analyze  │───>│ Implement   │───>│ Review │───>│ Fix      │───>│ Open PR │
+ │          │    │             │    │        │    │ feedback │    │         │
+ └──────────┘    └─────────────┘    └────────┘    └──────────┘    └─────────┘
+                                        │              │
+                                        └──────────────┘
+                                         (up to 3 rounds)
+----
+
+Analyze::
+Reads the issue, loads project context from the knowledge pack, maps affected files, and estimates story points.
+
+Implement::
+Fetches the repo, checks out a clean branch, applies code changes, runs linter and tests.
+
+Review::
+Runs an automated code review against the local diff before the PR is opened. Produces findings classified as blocking or non-blocking.
+
+Fix feedback::
+If blocking findings exist, the agent attempts to fix them. This loop runs up to 3 times.
+
+Open PR::
+Creates a pull request via the GitHub REST API with a structured description. In dry-run mode, writes a `pr-description.md` file instead.
+
+== Request flow
+
+----
+Browser ──> Fastify (port 3000) ──> REST API routes
+                │                         │
+                │                         ├── /api/runs → LangGraph agent
+                │                         ├── /api/projects → DB queries
+                │                         └── /ws → WebSocket (live logs)
+                │
+                └── Static files (frontend SPA)
+----
+
+The Fastify server serves both the REST API and the frontend static files. WebSocket connections stream real-time log updates to the browser.
+
+.Additional resources
+
+* xref:knowledge-packs.adoc[]
+* xref:database.adoc[]

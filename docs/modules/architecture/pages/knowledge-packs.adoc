@@ -1,0 +1,109 @@
+:_content-type: CONCEPT
+:description: Knowledge packs — how project context, rules, and skills are structured and loaded into the database.
+:keywords: knowledge packs, pg_seed, context, rules, skills, frontmatter
+:navtitle: Knowledge packs
+
+[id="knowledge-packs"]
+= Knowledge packs
+
+[role="_abstract"]
+Knowledge packs provide the agent with project-specific context, coding rules, and skills. They live in `pg_seed/eclipse-che/` and are imported into the database on startup.
+
+== Directory structure
+
+----
+pg_seed/eclipse-che/
+├── context/                          ← global ecosystem knowledge
+│   └── eclipse-che-ecosystem.md
+├── shared/
+│   ├── rules/                        ← cross-project rules
+│   │   ├── commit-conventions.md
+│   │   ├── issue-analysis.md
+│   │   ├── issue-filtering.md
+│   │   └── cve-batch.md
+│   ├── skills/                       ← shared agent skills
+│   │   ├── run-loop/SKILL.md
+│   │   ├── pick-issue/SKILL.md
+│   │   ├── filter-issues/SKILL.md
+│   │   └── batch-cve-fix/SKILL.md
+│   └── sources.md                    ← default issue sources
+├── projects.json                     ← project registry
+└── subprojects/
+    ├── che-dashboard/
+    │   ├── context.md                ← project description + YAML frontmatter
+    │   ├── context-patternfly.md     ← PatternFly UI patterns
+    │   ├── rules/dev.md              ← project-specific coding rules
+    │   └── skills/                   ← project-specific skills
+    │       ├── fix-issue/SKILL.md
+    │       ├── review-pr/SKILL.md
+    │       └── fix-cve-dep/SKILL.md
+    ├── che-server/
+    │   └── context.md
+    └── ...
+----
+
+== Context files
+
+Each subproject has a `context.md` file with YAML frontmatter that defines the project metadata:
+
+[source,yaml]
+----
+---
+repo: eclipse-che/che-dashboard
+default_branch: main
+stack: [TypeScript, React 18, PatternFly 6, Redux Toolkit]
+description: Web UI for Eclipse Che
+auto_approve_min_priority: major
+story_point_budget: 3
+local_path: .repos/eclipse-che/che-dashboard
+---
+----
+
+The `importKnowledge()` function parses this frontmatter and upserts the project into the database. The body of the file contains detailed context that the agent loads before any implementation work.
+
+== How import works
+
+On server startup, `importKnowledge()` scans the knowledge directory for all `.md` files and classifies each one:
+
+|===
+| Path pattern | Classification
+
+| `context/*.md`
+| Global context (project slug: `global`)
+
+| `subprojects/<slug>/context.md`
+| Main project context — triggers project registration
+
+| `subprojects/<slug>/*.md`
+| Additional project context (e.g., PatternFly patterns)
+
+| `subprojects/<slug>/rules/*.md`
+| Project-specific rules
+
+| `subprojects/<slug>/skills/*/SKILL.md`
+| Project-specific skills
+
+| `shared/rules/*.md`
+| Shared rules
+
+| `shared/skills/*/SKILL.md`
+| Shared skills
+
+| `shared/sources.md`
+| Default issue sources
+|===
+
+All content is upserted into the `contexts` table. Project registrations go into the `projects` table. Issue sources go into the `issue_sources` table.
+
+== Adding a new subproject
+
+. Create `pg_seed/eclipse-che/subprojects/<name>/context.md` with the YAML frontmatter fields shown above.
+. Optionally add `rules/dev.md` for project-specific coding rules.
+. Optionally add skills under `skills/<skill-name>/SKILL.md`.
+. Restart the server or run `yarn prepare:db` to import.
+
+.Additional resources
+
+* xref:overview.adoc[]
+* xref:database.adoc[]
+* xref:development:adding-subproject.adoc[]

@@ -1,0 +1,4 @@
+.Getting Started
+* xref:quick-start.adoc[Quick start]
+* xref:configuration.adoc[Configuration]
+* xref:eclipse-che.adoc[Running in Eclipse Che]

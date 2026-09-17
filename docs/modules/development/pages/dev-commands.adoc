@@ -1,0 +1,68 @@
+:_content-type: REFERENCE
+:description: Development commands — build, test, start, and watch modes.
+:keywords: development, commands, build, test, start, watch, yarn
+:navtitle: Dev commands
+
+[id="dev-commands"]
+= Dev commands
+
+[role="_abstract"]
+All commands are run from the repository root using Yarn.
+
+== Build and run
+
+|===
+| Command | Description
+
+| `yarn build`
+| Build both backend (webpack) and frontend (webpack). Outputs to `packages/agent-backend/lib/` and `packages/agent-frontend/lib/`.
+
+| `yarn prepare:db`
+| Seed the database from knowledge packs. Requires `yarn build` first. Runs migrations, imports projects from `projects.json`, loads all `.md` context files, and seeds LLM providers.
+
+| `yarn start`
+| Start the built API server on port 3000. Serves both the REST API and the frontend SPA.
+
+| `yarn start:frontend`
+| Start the webpack dev server for frontend development on port 5173. Proxies API requests to port 3000.
+
+| `yarn start:watch`
+| Start the backend in watch mode using `tsx` — hot-reloads on file changes without rebuilding. No webpack build needed.
+|===
+
+== Testing
+
+|===
+| Command | Description
+
+| `yarn test`
+| Run the test suite using Vitest.
+|===
+
+== Typical development workflow
+
+For backend changes::
++
+[source,bash]
+----
+yarn start:watch
+----
++
+This starts the server with hot-reload. Changes to TypeScript files in `packages/agent-backend/src/` are picked up automatically.
+
+For frontend changes::
++
+[source,bash]
+----
+yarn start          # API server on port 3000
+yarn start:frontend # webpack dev server on port 5173 (in another terminal)
+----
+
+For a full rebuild::
++
+[source,bash]
+----
+yarn build
+yarn prepare:db
+yarn start
+----

@@ -1,0 +1,4 @@
+.Development
+* xref:dev-commands.adoc[Dev commands]
+* xref:adding-subproject.adoc[Adding a subproject]
+* xref:writing-skills.adoc[Writing skills]

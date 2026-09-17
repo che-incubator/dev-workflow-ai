@@ -1,0 +1,51 @@
+:_content-type: CONCEPT
+:description: View and manage registered subprojects — each card shows the GitHub repo, tech stack, auto-approve settings, and clone status.
+:keywords: subprojects, projects, GitHub, repository, configuration
+:navtitle: Subprojects
+
+[id="subprojects"]
+= Subprojects
+
+[role="_abstract"]
+The *Subprojects* page displays all registered Eclipse Che subprojects as a card gallery. Projects are imported from the knowledge pack on startup.
+
+.Subprojects gallery
+image::projects__Subprojects.png[Subprojects gallery with project cards]
+
+== Project cards
+
+Each project card shows:
+
+* *Avatar* — GitHub organization or user icon, loaded from `github.com/<owner>.png`
+* *Name* — the project slug (e.g., `che-dashboard`)
+* *Repository* — link to the GitHub repository
+* *Stack* — technology badges (e.g., TypeScript, React 18, PatternFly 6)
+* *Description* — one-line project summary
+* *Auto-approve* — minimum priority level for auto-approved runs
+* *Budget* — maximum story points per session
+* *Last update* — timestamp of the last data refresh
+* *Path* — local clone path used by the agent
+
+== Card actions
+
+Each card provides three action buttons:
+
+Clone / Pull (sync icon)::
+Clones the repository locally or pulls the latest changes. Disabled while an agent run is active on that repo.
+
+Edit (pencil icon)::
+Opens a modal to update the project description, auto-approve priority, and story point budget.
+
+Delete (trash icon)::
+Removes the project and its local clone. Disabled while an agent run is active.
+
+== Adding a project
+
+Click *+ Add project* to register a new subproject manually. Provide the project name, GitHub repo (`owner/repo`), description, auto-approve priority, and story point budget.
+
+Projects can also be added by creating a `context.md` file with YAML frontmatter in `pg_seed/eclipse-che/subprojects/<name>/` and restarting the server.
+
+.Additional resources
+
+* xref:settings.adoc[]
+* xref:architecture:knowledge-packs.adoc[]

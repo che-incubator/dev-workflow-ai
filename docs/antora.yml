@@ -1,0 +1,19 @@
+name: docs
+title: dev-workflow-ai
+version: latest
+start_page: ROOT:index.adoc
+nav:
+  - modules/ROOT/nav.adoc
+  - modules/getting-started/nav.adoc
+  - modules/usage/nav.adoc
+  - modules/architecture/nav.adoc
+  - modules/development/nav.adoc
+  - modules/deployment/nav.adoc
+asciidoc:
+  attributes:
+    project-context: dev-workflow-ai
+    prod: dev-workflow-ai
+    prod-short: dev-workflow-ai
+    prod-url: "https://github.com/che-incubator/dev-workflow-ai"
+    icons: font
+    experimental: ""

@@ -1,0 +1,78 @@
+:_content-type: CONCEPT
+:description: How to write agent skills — SKILL.md format, shared vs per-project skills, and Claude Code integration.
+:keywords: skills, SKILL.md, Claude Code, automation, agent
+:navtitle: Writing skills
+
+[id="writing-skills"]
+= Writing skills
+
+[role="_abstract"]
+Skills are packaged instructions that the agent follows for specific tasks. They live in `.md` files and are loaded into the database as part of the knowledge pack.
+
+== Skill types
+
+Shared skills::
+Located in `pg_seed/eclipse-che/shared/skills/<name>/SKILL.md`. Available to all subprojects.
++
+Examples: `run-loop`, `pick-issue`, `filter-issues`, `batch-cve-fix`.
+
+Per-project skills::
+Located in `pg_seed/eclipse-che/subprojects/<project>/skills/<name>/SKILL.md`. Available only to that subproject.
++
+Examples: `fix-issue`, `review-pr`, `fix-cve-dep`.
+
+== SKILL.md format
+
+A skill file is a Markdown document with structured instructions:
+
+[source,markdown]
+----
+# Skill Name
+
+## When to use
+
+Describe the trigger conditions...
+
+## Steps
+
+1. First step...
+2. Second step...
+3. ...
+
+## Rules
+
+- Constraint 1
+- Constraint 2
+
+## Output format
+
+Describe expected output...
+----
+
+== Claude Code integration
+
+Skills in `pg_seed/eclipse-che/shared/skills/` are mirrored to `.claude/skills/` for Claude Code `/skill-name` invocation. Available slash commands:
+
+|===
+| Command | Skill
+
+| `/run-loop`
+| Full autonomous loop: pick issue, analyze, implement, PR
+
+| `/pick-issue`
+| Select next unassigned issue within story-point budget
+
+| `/filter-issues`
+| Score and rank open issues
+
+| `/assign-story-points`
+| Estimate complexity (1/2/3/5/8)
+
+| `/batch-cve-fix`
+| Combine 2-15 CVE issues into one branch and PR
+|===
+
+.Additional resources
+
+* xref:adding-subproject.adoc[]
+* xref:architecture:knowledge-packs.adoc[]

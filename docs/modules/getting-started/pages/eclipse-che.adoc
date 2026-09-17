@@ -1,0 +1,124 @@
+:_content-type: PROCEDURE
+:description: Run {prod} inside an Eclipse Che cloud development environment.
+:keywords: Eclipse Che, DevWorkspace, cloud, deployment, devfile
+:navtitle: Eclipse Che workspace
+
+[id="eclipse-che-workspace"]
+= Running in Eclipse Che
+
+[role="_abstract"]
+{prod} includes a `devfile.yaml` that defines a ready-to-use cloud development environment in Eclipse Che.
+
+.Prerequisites
+
+* An Eclipse Che instance (version 7.80+)
+* `oc` CLI logged in to the target cluster
+
+== Creating the credentials secrets
+
+Before opening the workspace, create Kubernetes secrets that the DevWorkspace Operator will inject as environment variables. Each secret needs these labels and annotation:
+
+* `controller.devfile.io/mount-to-devworkspace: "true"` — tells the operator to mount the secret
+* `controller.devfile.io/watch-secret: "true"` — picks up changes without restarting
+* `controller.devfile.io/mount-as: env` — injects keys as environment variables
+
+You need one secret per credential group. For example:
+
+[source,bash]
+----
+# GitHub token (required for opening PRs)
+oc apply -f - <<EOF
+kind: Secret
+apiVersion: v1
+metadata:
+  name: github-token
+  labels:
+    controller.devfile.io/mount-to-devworkspace: 'true'
+    controller.devfile.io/watch-secret: 'true'
+  annotations:
+    controller.devfile.io/mount-as: env
+data:
+  GITHUB_TOKEN: $(echo -n 'ghp_your_token' | base64)
+type: Opaque
+EOF
+
+# Gemini API key
+oc apply -f - <<EOF
+kind: Secret
+apiVersion: v1
+metadata:
+  name: llm-gemini
+  labels:
+    controller.devfile.io/mount-to-devworkspace: 'true'
+    controller.devfile.io/watch-secret: 'true'
+  annotations:
+    controller.devfile.io/mount-as: env
+data:
+  GEMINI_API_KEY: $(echo -n 'your_gemini_key' | base64)
+  GEMINI_MODEL: $(echo -n 'gemini-3.6-flash' | base64)
+type: Opaque
+EOF
+----
+
+You can add additional secrets for other providers and services — each secret can hold multiple keys under `data`:
+
+|===
+| Secret name | Keys | Description
+
+| `github-token`
+| `GITHUB_TOKEN`
+| GitHub PAT for opening PRs
+
+| `llm-vertex`
+| `ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION`, `VERTEX_CLAUDE_MODEL`, `GOOGLE_APPLICATION_CREDENTIALS_JSON`
+| Claude via Vertex AI
+
+| `llm-gemini`
+| `GEMINI_API_KEY`, `GEMINI_MODEL`
+| Google Gemini
+
+| `jira-credentials`
+| `JIRA_TOKEN`, `JIRA_EMAIL`, `JIRA_BASE_URL`
+| Jira integration
+|===
+
+=== Using the push-secrets script
+
+Instead of creating secrets manually, use `run/push-secrets-to-ocp.sh` to push all credentials from your local `.env` file to OpenShift in one step:
+
+[source,bash]
+----
+# Log in to the cluster
+oc login https://<your-ocp-api-url>
+
+# Push all secrets from .env to the target namespace
+./run/push-secrets-to-ocp.sh --namespace <your-namespace>
+----
+
+The script reads each variable from `.env` (or from already-exported shell env vars), creates one labelled secret per credential group, and skips any group where all values are empty. After pushing, restart the DevWorkspace to pick up the new secrets.
+
+== Opening the workspace
+
+Navigate to the factory URL:
+
+----
+https://<che-host>/f?url=https://github.com/che-incubator/dev-workflow-ai
+----
+
+The DevWorkspace starts with Node.js and all dependencies pre-installed. Environment variables from the secret are available immediately.
+
+== Starting the server in the workspace
+
+[source,bash]
+----
+yarn build
+yarn prepare:db
+yarn start
+----
+
+The server listens on port 3000. Eclipse Che exposes it via the workspace routing, so you can access the UI from your browser.
+
+.Additional resources
+
+* xref:quick-start.adoc[]
+* xref:configuration.adoc[]

@@ -1,0 +1,49 @@
+:_content-type: CONCEPT
+:description: Monitor agent runs — view recent executions, follow live logs, and inspect phase progress.
+:keywords: runtime, runs, agent, monitoring, logs
+:navtitle: Runtime
+
+[id="runtime"]
+= Runtime
+
+[role="_abstract"]
+The *Runtime* page is the main dashboard for monitoring agent activity. It shows all recent runs and lets you drill into individual executions.
+
+== Recent runs
+
+The runs table lists every agent execution with its issue, organization, project, status, and timestamp.
+
+.Recent runs table
+image::runtime__Recent runs.png[Recent runs table]
+
+Each row shows:
+
+* *ID* — unique run identifier
+* *Issue* — link to the GitHub or Jira issue being processed
+* *Organization* — the GitHub organization (e.g., `eclipse-che`)
+* *Project* — the subproject name (e.g., `che-dashboard`)
+* *Status* — current state: `running`, `done`, or `failed`
+* *Last update* — timestamp of the most recent activity
+
+== Run detail view
+
+Click a run row to open the detail view with phase progress and a live log.
+
+.Run detail view with phases and log
+image::runs__Runtime.png[Run detail — phases and log]
+
+The left panel shows the pipeline phases with completion status:
+
+* *Analyze* — issue parsed, files mapped, story points estimated
+* *Implement* — branch created, fix applied
+* *Review* — automated code review on the diff
+* *Fix if needed* — address review findings (up to 3 rounds)
+* *Open PR* — pull request created via GitHub API
+* *Done* — run completed successfully
+
+The right panel shows a scrollable log with timestamped entries for each step.
+
+.Additional resources
+
+* xref:issues.adoc[]
+* xref:settings.adoc[]

@@ -1,0 +1,86 @@
+:_content-type: CONCEPT
+:description: Overview of {prod} — an autonomous AI engineer that automates the issue-to-PR loop for Eclipse Che subprojects.
+:keywords: overview, AI engineer, Eclipse Che, automation, LangGraph
+:navtitle: What is {prod}?
+
+[id="what-is-{project-context}"]
+= What is {prod}?
+
+[role="_abstract"]
+{prod} is an autonomous AI engineer bot for the link:https://www.eclipse.org/che/[Eclipse Che] ecosystem.
+It automates the full contribution loop — from selecting an open issue to delivering a ready-to-merge pull request — across multiple subprojects.
+
+== How it works
+
+The agent follows a linear pipeline for every issue it processes:
+
+----
+Open Issue → Analyze → Implement → Review → Fix feedback → Open PR
+----
+
+. *Analyze* — the agent reads the issue, maps it to a subproject, identifies affected files, and estimates story points.
+. *Implement* — it checks out a clean branch, applies the fix or feature, and runs the project's linter and tests.
+. *Review* — an automated code review runs against the local diff *before* the PR is opened. Blocking findings trigger a fix-feedback loop (up to 3 rounds).
+. *Open PR* — after a clean review, the agent opens a pull request via the GitHub API with a structured description.
+
+Security and CVE issues always run first. When multiple CVE issues are open, the agent batches them into a single PR.
+
+== Web interface
+
+{prod} ships with a web UI built on link:https://www.patternfly.org/[PatternFly 6] that lets you:
+
+* Monitor active and past runs in real time
+* Browse and filter issues from GitHub and Jira sources
+* Manage subprojects and their settings
+* Configure LLM providers, auto-approve thresholds, and daily autorun schedules
+
+== Supported subprojects
+
+|===
+| Subproject | Repository | Stack
+
+| che-dashboard
+| `eclipse-che/che-dashboard`
+| TypeScript, React 18, PatternFly 6
+
+| che-server
+| `eclipse-che/che-server`
+| Java, Maven
+
+| che-docs
+| `eclipse-che/che-docs`
+| AsciiDoc, Antora
+
+| devworkspace-operator
+| `devfile/devworkspace-operator`
+| Go, Operator SDK
+
+| devworkspace-generator
+| `che-incubator/devworkspace-generator`
+| TypeScript
+
+| che-ai-tool-images
+| `che-incubator/che-ai-tool-images`
+| Dockerfile
+
+| dash-licenses
+| `che-incubator/dash-licenses`
+| Java, Maven
+|===
+
+== Technology stack
+
+Backend::
+Fastify, LangGraph (agent orchestration), PostgreSQL / PGlite (embedded Postgres in WASM), webpack.
+
+Frontend::
+React 18, PatternFly 6, Redux Toolkit, webpack.
+
+LLM providers::
+Claude via Vertex AI, Google Gemini, Ollama (local models).
+
+.Additional resources
+
+* xref:getting-started:quick-start.adoc[]
+* xref:architecture:overview.adoc[]
+* xref:usage:runtime.adoc[]

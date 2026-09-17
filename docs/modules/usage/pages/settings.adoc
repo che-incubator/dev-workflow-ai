@@ -1,0 +1,117 @@
+:_content-type: REFERENCE
+:description: Configure agent defaults, AI providers, daily autorun, and knowledge sources.
+:keywords: settings, configuration, LLM, autorun, providers, knowledge
+:navtitle: Settings
+
+[id="settings"]
+= Settings
+
+[role="_abstract"]
+The *Settings* page is divided into four sections: Agent Defaults, AI Providers, Daily Autorun, and Knowledge Sources.
+
+== Agent defaults
+
+Global thresholds applied to every run unless overridden per project.
+
+.Agent defaults configuration
+image::settings__agent_Defaults.png[Agent defaults — budget, priority, execution mode]
+
+Auto-approve max budget::
+Maximum story points the agent will auto-approve without human review (default: 3).
+
+Auto-approve min priority::
+Minimum issue priority level for auto-approval. Issues below this threshold require manual approval. Options: `critical`, `major`, `minor`, `trivial`.
+
+Clone directory path::
+Base directory where the agent clones subproject repositories (default: `.repos`).
+
+Execution mode::
+* *Create Pull Request* — the agent opens a real PR on GitHub (requires `GITHUB_TOKEN`).
+* *Dry Run* — the agent writes a `pr-description.md` file to `output/` instead.
+
+== AI providers
+
+Configure and test LLM backends. Click a provider name to set it as the active backend.
+
+.AI providers configuration
+image::settings__AI_Providers.png[AI providers — Vertex AI Claude active]
+
+Each provider row shows:
+
+* *Provider* — name and active badge
+* *Credential* — whether the required API key or project ID is configured
+* *Model* — the model identifier (e.g., `claude-sonnet-4-6@default`)
+* *Region / URL* — Vertex AI region or Ollama base URL
+
+Use the *Test selected provider* section to verify the active provider works before saving. Type a prompt and click *Send* to see the model's response.
+
+Click *+ Add provider* to configure a new backend (Vertex AI, Gemini, or Ollama).
+
+== Daily autorun
+
+Automatically pick and run one issue at scheduled times each day.
+
+.Daily autorun scheduler
+image::settings__Daily_Autorun.png[Daily autorun — enabled with 09:00 schedule]
+
+Enable the toggle to activate the scheduler. Add one or more scheduled times in `HH:MM` format. The agent will pick the highest-scoring eligible issue and run the full loop at each scheduled time.
+
+Click *Force start now* to trigger an immediate autorun outside the schedule.
+
+== Knowledge sources
+
+View and manage knowledge packs loaded from `pg_seed/`.
+
+.Knowledge sources
+image::settings__Knowledge_Sources.png[Knowledge sources panel]
+
+Knowledge packs contain project context, rules, and skills that the agent uses during analysis and implementation. They are loaded into the database on startup from the `pg_seed/eclipse-che/` directory.
+
+To populate knowledge sources, run `yarn prepare:db` after building. This seeds the database with all knowledge packs found under `pg_seed/`.
+
+=== What can be added
+
+Each subproject directory under `pg_seed/eclipse-che/subprojects/<name>/` can contain:
+
+`context.md`::
+Project description, tech stack, repository structure, and local path. This is the primary file the agent reads before any work on that subproject.
+
+`rules/dev.md`::
+Development rules — commit format, CSS ordering conventions, license regeneration triggers.
+
+`skills/`::
+Per-project skills such as `fix-issue`, `review-pr`, `fix-cve-dep`, and `pr-description`. Each skill has a `SKILL.md` file with step-by-step instructions.
+
+=== Directory structure example
+
+[source]
+----
+pg_seed/eclipse-che/
+├── context/
+│   └── eclipse-che-ecosystem.md   <1>
+├── shared/
+│   ├── rules/                     <2>
+│   ├── skills/                    <3>
+│   └── sources.md                 <4>
+└── subprojects/
+    └── che-dashboard/
+        ├── context.md             <5>
+        ├── context-patternfly.md  <6>
+        ├── rules/dev.md           <7>
+        └── skills/                <8>
+----
+<1> Ecosystem-level knowledge shared across all subprojects
+<2> Shared rules: commit conventions, issue filtering, CVE batching
+<3> Shared skills: `run-loop`, `pick-issue`, `filter-issues`
+<4> Default issue sources (Jira, GitHub)
+<5> Project-specific context — tech stack, dir structure, API routes
+<6> Additional context — PatternFly component usage patterns
+<7> Project-specific dev rules
+<8> Project-specific skills — `fix-issue`, `review-pr`, etc.
+
+Use *Export to JSON* to download the current knowledge pack configuration.
+
+.Additional resources
+
+* xref:getting-started:configuration.adoc[Configuration]
+* xref:architecture:knowledge-packs.adoc[Knowledge packs]

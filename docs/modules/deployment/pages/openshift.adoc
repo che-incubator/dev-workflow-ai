@@ -1,0 +1,53 @@
+:_content-type: PROCEDURE
+:description: Deploy {prod} on OpenShift using the deployment script and Kubernetes secrets.
+:keywords: OpenShift, deployment, Kubernetes, secrets, production
+:navtitle: OpenShift
+
+[id="openshift-deployment"]
+= Deploying on OpenShift
+
+[role="_abstract"]
+Deploy {prod} on an OpenShift cluster with a PostgreSQL sidecar for persistent storage.
+
+.Prerequisites
+
+* `oc` CLI logged into the target cluster
+* A namespace with appropriate permissions
+
+.Procedure
+
+. Create the credentials secret:
++
+[source,bash]
+----
+oc apply -f - <<EOF
+kind: Secret
+apiVersion: v1
+metadata:
+  name: dev-workflow-ai-secrets
+type: Opaque
+data:
+  GITHUB_TOKEN: $(echo -n 'ghp_your_token' | base64)
+  ANTHROPIC_VERTEX_PROJECT_ID: $(echo -n 'my-gcp-project' | base64)
+EOF
+----
+
+. Run the deployment script:
++
+[source,bash]
+----
+./run/deploy-ocp.sh
+----
+
+== PostgreSQL configuration
+
+IMPORTANT: Always set `PGDATA=/tmp/pgdata` on the PostgreSQL sidecar container. The default data directory (`/var/lib/postgresql/data`) is owned by UID 70 and is inaccessible to OpenShift's randomly assigned UID.
+
+== Persistent storage
+
+Set `PGLITE_DATA_DIR=/app/data` if using PGlite instead of a PostgreSQL sidecar. Mount a PersistentVolumeClaim at `/app/data` to survive pod restarts.
+
+.Additional resources
+
+* xref:podman.adoc[]
+* xref:getting-started:eclipse-che.adoc[]

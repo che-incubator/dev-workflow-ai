@@ -1,0 +1,3 @@
+.Deployment
+* xref:podman.adoc[Running with Podman]
+* xref:openshift.adoc[Deploying on OpenShift]

@@ -1,0 +1,57 @@
+:_content-type: CONCEPT
+:description: Browse fetched issues, manage issue sources, and queue individual issues for the agent to process.
+:keywords: issues, sources, GitHub, Jira, issue picker, sync
+:navtitle: Issues
+
+[id="issues"]
+= Issues
+
+[role="_abstract"]
+The *Issues* page provides three views: issue sources, all fetched issues, and an issue picker for manual runs.
+
+== Issue sources
+
+Issue sources define where the agent fetches issues from. Sources can be GitHub repositories or Jira boards.
+
+.Issue sources — GitHub and Jira
+image::issues__Issues_Sources.png[Issue sources configuration]
+
+Each source shows:
+
+* *Kind* — `github` or `jira`
+* *Source* — the repository or board URL
+* *Last synced* — when issues were last fetched
+
+To add a source, paste a GitHub repository URL or Jira board URL into the input field and click *Add*. Sources defined in the knowledge pack (`pg_seed/eclipse-che/shared/sources.md`) are seeded automatically on startup.
+
+== All issues
+
+After syncing, all fetched issues appear in a filterable table. Issues are automatically classified into *Prioritized* (critical/major) and *Skipped* (minor/trivial) based on their labels and the auto-approve rules.
+
+.All issues table
+image::issues__All_Issues.png[All issues table]
+
+Each issue row displays:
+
+* *ID* — the issue key (clickable link to GitHub/Jira)
+* *Title* — issue summary
+* *Opened* — creation date
+* *Labels* — issue labels as badges
+* *Priority* — computed priority level
+* *SP* — estimated story points
+
+Use the *Batch CVE fix* button to combine multiple security issues into a single branch and pull request.
+
+== Issue picker
+
+The issue picker lets you queue specific issues for the agent to process. Paste a GitHub issue URL or Jira URL, choose the priority mode, and click *Add*.
+
+.Issue picker — queue issues for the agent
+image::issues__Issue_Picker.png[Issue picker]
+
+Each queued issue can be started individually. The *Mode* column shows whether the priority was set to *auto* (agent decides) or overridden manually.
+
+.Additional resources
+
+* xref:runtime.adoc[]
+* xref:settings.adoc[]

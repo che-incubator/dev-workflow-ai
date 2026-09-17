@@ -1,0 +1,28 @@
+site:
+  title: Autonomous AI Software Engineer (dev-workflow-ai) documentation
+  start_page: docs::index.adoc
+
+content:
+  sources:
+    - url: ../
+      branches: HEAD
+      start_path: docs
+
+output:
+  clean: true
+  dir: ../build/site
+
+ui:
+  bundle:
+    url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/master/raw/build/ui-bundle.zip?job=bundle-stable
+    snapshot: true
+  supplemental_files: ./supplemental-ui
+
+asciidoc:
+  attributes:
+    project-context: dev-workflow-ai
+    prod: dev-workflow-ai
+    prod-short: dev-workflow-ai
+    prod-url: 'https://github.com/che-incubator/dev-workflow-ai'
+    icons: font
+    experimental: ''

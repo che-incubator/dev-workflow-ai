@@ -1,0 +1,78 @@
+:_content-type: CONCEPT
+:description: Database architecture — PGlite for local development, PostgreSQL for production, and the migration system.
+:keywords: database, PGlite, PostgreSQL, migrations, schema
+:navtitle: Database
+
+[id="database"]
+= Database
+
+[role="_abstract"]
+{prod} uses PostgreSQL as its database. For local development, it runs PGlite — a full PostgreSQL engine compiled to WebAssembly — requiring no external database server.
+
+== Backend selection
+
+The database client auto-selects the backend based on the `DATABASE_URL` environment variable:
+
+|===
+| Condition | Backend | Description
+
+| `DATABASE_URL` is set
+| `pg.Pool` (real PostgreSQL)
+| Connects to an external PostgreSQL server. Used in production and OpenShift deployments.
+
+| `DATABASE_URL` is unset
+| PGlite (Postgres in WASM)
+| Embedded PostgreSQL — no server required. Ideal for local development and testing.
+|===
+
+== PGlite storage modes
+
+|===
+| `PGLITE_DATA_DIR` | Behavior
+
+| Set (e.g., `/app/data`)
+| Persistent — data survives restarts.
+
+| Unset
+| In-memory — data resets on every restart. The `yarn prepare:db` step must be run before each `yarn start`.
+|===
+
+For persistent local development, set `PGLITE_DATA_DIR=.local/pglite` in your `.env` file.
+
+== Schema
+
+The database schema is created by the migration system on startup. Key tables:
+
+|===
+| Table | Purpose
+
+| `projects`
+| Registered subprojects with repo, stack, and auto-approve settings.
+
+| `contexts`
+| Knowledge pack content (markdown files) keyed by project slug and name.
+
+| `issue_sources`
+| GitHub and Jira sources to fetch issues from.
+
+| `issues`
+| Fetched issues with metadata, labels, and priority scores.
+
+| `runs`
+| Agent run records with status, log, and timing.
+
+| `settings`
+| Global agent settings (budget, priority, execution mode).
+
+| `providers`
+| Configured LLM provider backends.
+|===
+
+== Migrations
+
+Migrations run automatically on startup via `runMigrations()`. They are idempotent — safe to run multiple times. The migration system uses `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` patterns.
+
+.Additional resources
+
+* xref:overview.adoc[]
+* xref:getting-started:configuration.adoc[]

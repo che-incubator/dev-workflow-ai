@@ -1,0 +1,97 @@
+:_content-type: REFERENCE
+:description: REST API reference — all endpoints are documented via Swagger UI.
+:keywords: API, REST, Swagger, endpoints, OpenAPI
+:navtitle: API reference
+
+[id="api-reference"]
+= API reference
+
+[role="_abstract"]
+{prod} exposes a REST API on the same port as the web UI. Interactive API documentation is available via Swagger UI.
+
+== Swagger UI
+
+Open `http://localhost:3000/swagger` in your browser to access the interactive API docs. All endpoints can be tested directly from the Swagger interface using the *Try it out* button.
+
+== Core endpoints
+
+|===
+| Method | Path | Description
+
+| `GET`
+| `/api/projects`
+| List all registered subprojects
+
+| `POST`
+| `/api/projects`
+| Add a new subproject
+
+| `PUT`
+| `/api/projects/:name`
+| Update subproject settings
+
+| `DELETE`
+| `/api/projects/:name`
+| Remove a subproject
+
+| `POST`
+| `/api/projects/:name/update`
+| Clone or pull the subproject repository
+
+| `GET`
+| `/api/runs`
+| List all agent runs
+
+| `POST`
+| `/api/runs`
+| Start a new agent run on an issue
+
+| `GET`
+| `/api/runs/:id`
+| Get run details and log
+
+| `GET`
+| `/api/sources`
+| List issue sources
+
+| `POST`
+| `/api/sources`
+| Add an issue source
+
+| `POST`
+| `/api/sources/sync`
+| Sync issues from all sources
+
+| `GET`
+| `/api/issues`
+| List fetched issues
+
+| `GET`
+| `/api/preferences/user`
+| Get current user identity (from `GITHUB_TOKEN`)
+
+| `GET`
+| `/api/settings`
+| Get agent settings
+
+| `PUT`
+| `/api/settings`
+| Update agent settings
+
+| `GET`
+| `/api/providers`
+| List configured LLM providers
+
+| `GET`
+| `/health`
+| Health check endpoint
+|===
+
+== WebSocket
+
+A WebSocket endpoint at `/ws` streams real-time updates for active runs. The frontend connects automatically to receive live log entries and status changes.
+
+.Additional resources
+
+* xref:runtime.adoc[]
+* xref:getting-started:configuration.adoc[]

@@ -1,0 +1,99 @@
+:_content-type: PROCEDURE
+:description: How to add a new Eclipse Che subproject to the agent's knowledge base.
+:keywords: subproject, knowledge pack, context.md, add project
+:navtitle: Adding a subproject
+
+[id="adding-a-subproject"]
+= Adding a subproject
+
+[role="_abstract"]
+Register a new subproject so the agent can analyze issues, implement fixes, and open pull requests for it.
+
+.Procedure
+
+. Create the subproject directory:
++
+[source,bash]
+----
+mkdir -p pg_seed/eclipse-che/subprojects/<name>
+----
+
+. Create `context.md` with YAML frontmatter:
++
+[source,yaml]
+----
+---
+repo: <org>/<repo>
+default_branch: main
+stack: [Language, Framework, ...]
+description: One-line description of the project
+auto_approve_min_priority: major
+story_point_budget: 3
+local_path: .repos/<org>/<repo>
+issue_source: https://github.com/<org>/<repo>/issues
+---
+# <name> — AI Context File
+
+> Load this file BEFORE any implementation work.
+
+## Role
+
+Describe what the project does...
+
+## Directory Structure
+
+List the key directories and their purpose...
+
+## Key Files
+
+List the important files the agent should know about...
+----
+
+. _(Optional)_ Add project-specific rules at `rules/dev.md`:
++
+[source,asciidoc]
+----
+# Dev Rules — <name>
+
+- Commit format: ...
+- Run tests with: ...
+- License compliance: ...
+----
+
+. _(Optional)_ Add project-specific skills under `skills/<skill-name>/SKILL.md`.
+
+. Add the project to `pg_seed/eclipse-che/projects.json`:
++
+[source,json]
+----
+{
+  "<name>": {
+    "repo": "<org>/<repo>",
+    "local_path": ".repos/<org>/<repo>",
+    "stack": ["Language", "Framework"],
+    "description": "One-line description",
+    "default_branch": "main",
+    "auto_approve": {
+      "min_priority": "major"
+    }
+  }
+}
+----
+
+. Rebuild and re-seed:
++
+[source,bash]
+----
+yarn build
+yarn prepare:db
+yarn start
+----
+
+.Verification
+
+The new project should appear on the *Subprojects* page with its GitHub avatar and stack badges.
+
+.Additional resources
+
+* xref:architecture:knowledge-packs.adoc[]
+* xref:writing-skills.adoc[]

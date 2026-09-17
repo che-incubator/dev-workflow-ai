@@ -1,0 +1,85 @@
+:_content-type: REFERENCE
+:description: Environment variables and .env configuration for {prod}.
+:keywords: configuration, environment variables, .env, LLM, GitHub token
+:navtitle: Configuration
+
+[id="configuration"]
+= Configuration
+
+[role="_abstract"]
+{prod} reads configuration from environment variables. For local development, create a `.env` file in the repository root.
+
+== Required variables
+
+|===
+| Variable | Description | Example
+
+| `GITHUB_TOKEN`
+| GitHub personal access token with `repo` scope. Used to open pull requests and resolve your GitHub identity.
+| `ghp_abc123...`
+|===
+
+== LLM provider variables
+
+Configure at least one LLM backend. The agent uses the active provider selected in *Settings > AI Providers*.
+
+|===
+| Variable | Description
+
+| `ANTHROPIC_VERTEX_PROJECT_ID`
+| Google Cloud project ID for Claude via Vertex AI.
+
+| `GOOGLE_CLOUD_REGION`
+| Vertex AI region (default: `global`).
+
+| `GEMINI_API_KEY`
+| API key for Google Gemini models.
+
+| `OLLAMA_BASE_URL`
+| Base URL for a local Ollama instance (e.g., `http://localhost:11434`).
+|===
+
+== Optional variables
+
+|===
+| Variable | Description | Default
+
+| `PORT`
+| HTTP port for the server.
+| `3000`
+
+| `DATABASE_URL`
+| PostgreSQL connection string. When unset, PGlite (embedded Postgres in WASM) is used.
+| _(unset — PGlite)_
+
+| `PGLITE_DATA_DIR`
+| Directory for persistent PGlite storage. When unset, data is in-memory and resets on restart.
+| _(unset — in-memory)_
+
+| `KNOWLEDGE_DIR`
+| Path to knowledge packs directory.
+| `/knowledge` (container) or `pg_seed/eclipse-che` (local)
+
+| `JIRA_BASE_URL`
+| Jira instance base URL.
+| `https://redhat.atlassian.net`
+
+| `JIRA_EMAIL`
+| Jira account email for "assigned to me" source seeding.
+| _(unset)_
+
+| `JIRA_TOKEN`
+| Jira API token.
+| _(unset)_
+|===
+
+== Example `.env` file
+
+[source,bash]
+----
+GITHUB_TOKEN=ghp_your_token_here
+ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
+GOOGLE_CLOUD_REGION=global
+----
+
+IMPORTANT: The `.env` file contains secrets. It is gitignored and must never be committed.

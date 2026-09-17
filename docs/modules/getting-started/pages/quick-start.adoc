@@ -1,0 +1,69 @@
+:_content-type: PROCEDURE
+:description: Clone, build, and start {prod} on your local machine.
+:keywords: quick start, install, local, build, start
+:navtitle: Quick start
+
+[id="quick-start"]
+= Quick start
+
+[role="_abstract"]
+Get {prod} running locally in under five minutes.
+
+.Prerequisites
+
+* Node.js 20 or later
+* Yarn (classic)
+* Git
+
+.Procedure
+
+. Clone the repository:
++
+[source,bash]
+----
+git clone https://github.com/che-incubator/dev-workflow-ai.git
+cd dev-workflow-ai
+----
+
+. Install dependencies:
++
+[source,bash]
+----
+yarn install
+----
+
+. Build the backend and frontend:
++
+[source,bash]
+----
+yarn build
+----
+
+. Seed the database from knowledge packs:
++
+[source,bash]
+----
+yarn prepare:db
+----
++
+This runs migrations, imports projects from `pg_seed/eclipse-che/`, and seeds default LLM providers and issue sources.
+
+. Start the server:
++
+[source,bash]
+----
+yarn start
+----
+
+. Open the web UI at `http://localhost:3000`.
+
+.Verification
+
+* The *Runtime* page shows an empty "Recent runs" table.
+* The *Subprojects* page lists all registered Eclipse Che subprojects with their GitHub avatars.
+* The *Swagger* API docs are available at `http://localhost:3000/swagger`.
+
+.Additional resources
+
+* xref:configuration.adoc[]
+* xref:eclipse-che.adoc[]

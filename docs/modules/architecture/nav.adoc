@@ -1,0 +1,4 @@
+.Architecture
+* xref:overview.adoc[Architecture overview]
+* xref:knowledge-packs.adoc[Knowledge packs]
+* xref:database.adoc[Database]

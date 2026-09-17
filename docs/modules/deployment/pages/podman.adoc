@@ -1,0 +1,42 @@
+:_content-type: PROCEDURE
+:description: Run {prod} locally using Podman with the pre-built container image.
+:keywords: Podman, container, local, deployment
+:navtitle: Podman (local)
+
+[id="podman-local"]
+= Running with Podman
+
+[role="_abstract"]
+Run {prod} locally using the pre-built container image. This is the simplest way to get a fully functional instance without building from source.
+
+.Prerequisites
+
+* Podman installed
+* A GitHub personal access token
+
+.Procedure
+
+. Run the deployment script:
++
+[source,bash]
+----
+./run/run-local-podman.sh
+----
++
+The script pulls the pre-built image and starts a Podman pod with the application and a PostgreSQL sidecar.
+
+. Set environment variables before running:
++
+[source,bash]
+----
+export GITHUB_TOKEN=ghp_your_token
+export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
+./run/run-local-podman.sh
+----
+
+. Open `http://localhost:3000` in your browser.
+
+.Additional resources
+
+* xref:openshift.adoc[]
+* xref:getting-started:configuration.adoc[]
