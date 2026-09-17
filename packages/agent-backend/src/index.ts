@@ -54,6 +54,9 @@ async function main() {
   loadEnvFile();
   const port = parseInt(process.env.PORT ?? '3000', 10);
 
+  const knowledgeDir = resolveKnowledgeDir();
+  process.env.KNOWLEDGE_DIR = knowledgeDir;
+
   console.log('[boot] Running DB migrations…');
   await runMigrations();
 
@@ -61,8 +64,6 @@ async function main() {
   await seedDefaultProviders();
   await seedDefaultSources();
 
-  const knowledgeDir = resolveKnowledgeDir();
-  process.env.KNOWLEDGE_DIR = knowledgeDir;
   console.log(`[boot] Importing knowledge from ${knowledgeDir}…`);
   await importKnowledge(knowledgeDir);
 

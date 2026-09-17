@@ -76,7 +76,8 @@ async function main() {
   const projectsJson = join(KNOWLEDGE_DIR, 'projects.json');
   try {
     const raw = await readFile(projectsJson, 'utf8');
-    const { projects } = JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    const projects = parsed.projects ?? {};
     let upserted = 0;
     for (const [name, cfg] of Object.entries(projects) as [string, Record<string, unknown>][]) {
       await db.query(
@@ -101,6 +102,29 @@ async function main() {
       upserted++;
     }
     console.log(`      ✓ ${upserted} project(s) upserted from projects.json`);
+
+    // Seed issue_sources from projects.json
+    const issueSources = Array.isArray(parsed.issue_sources) ? parsed.issue_sources : [];
+    for (const url of issueSources as string[]) {
+      if (!url) continue;
+      const isJira =
+        url.includes('atlassian.net') || url.includes('/jira/') || url.includes('/browse/');
+      const label = url.includes('/jira/for-you')
+        ? 'Assigned to me'
+        : isJira
+          ? new URL(url).hostname
+          : url.replace('https://github.com/', '');
+      const kind = isJira ? 'jira' : 'github';
+      await db.query(
+        `INSERT INTO issue_sources (url, kind, label)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (url) DO NOTHING`,
+        [url, kind, label],
+      );
+    }
+    if (issueSources.length > 0) {
+      console.log(`      ✓ ${issueSources.length} issue source(s) seeded from projects.json`);
+    }
   } catch (e) {
     console.warn(
       `      ⚠ projects.json import failed (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
