@@ -178,6 +178,8 @@ The project documentation is built with [Antora](https://antora.org/) from Ascii
 ./docs/build.sh --serve  # build and serve on http://localhost:4000
 ```
 
+After building, docs are also served by the API server at **http://localhost:3000/docs/** (click **? → Documentation** in the UI).
+
 ---
 
 ## Development

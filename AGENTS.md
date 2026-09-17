@@ -64,6 +64,7 @@ yarn test            # vitest
 ```
 
 API docs: http://localhost:3000/swagger
+Antora docs: http://localhost:3000/docs/ (requires `./docs/build.sh` first)
 
 ## Eclipse Che Deployment
 

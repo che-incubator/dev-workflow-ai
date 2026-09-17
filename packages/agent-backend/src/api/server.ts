@@ -71,6 +71,16 @@ export async function buildServer() {
     });
   }
 
+  // Serve Antora docs site (built by ./docs/build.sh → build/site/)
+  const docsDir = join(__dir, '../../../../build/site');
+  if (existsSync(docsDir)) {
+    await app.register(staticPlugin, {
+      root: docsDir,
+      prefix: '/docs/',
+      decorateReply: false,
+    });
+  }
+
   // User identity (public — no session check)
   await app.register(authRoutes, { prefix: '/api/preferences' });
 
@@ -94,7 +104,7 @@ export async function buildServer() {
   if (existsSync(distDir)) {
     app.setNotFoundHandler((req, reply) => {
       const url = req.url;
-      if (url.startsWith('/api/') || url.startsWith('/swagger') || url.startsWith('/ws') || url === '/health') {
+      if (url.startsWith('/api/') || url.startsWith('/docs/') || url.startsWith('/swagger') || url.startsWith('/ws') || url === '/health') {
         return reply.code(404).send({ error: 'Not Found' });
       }
       reply.sendFile('index.html');
