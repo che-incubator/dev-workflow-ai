@@ -303,11 +303,15 @@ export default function Projects() {
             </FlexItem>
           </Flex>
         ) : filtered.length === 0 ? (
-          <EmptyState>
+          <EmptyState
+            variant="sm"
+            icon={CubesIcon}
+            titleText={filter ? 'No matches' : 'No projects yet'}
+          >
             <EmptyStateBody>
               {filter
                 ? `No projects match "${filter}".`
-                : 'No projects yet. Click "+ Add project" or run yarn init-db.'}
+                : 'Run "yarn prepare:db" to seed projects, or click "Add project".'}
             </EmptyStateBody>
           </EmptyState>
         ) : (
