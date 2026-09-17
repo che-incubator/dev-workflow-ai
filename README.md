@@ -183,12 +183,16 @@ The project documentation is built with [Antora](https://antora.org/) from Ascii
 ## Development
 
 ```bash
-yarn build           # build backend + frontend
-yarn prepare:db      # seed DB from pg_seed/ (requires build)
-yarn start           # run the built API server (port 3000)
-yarn start:frontend  # webpack frontend dev server (port 5173)
-yarn start:watch     # dev mode — tsx hot-reload, no build needed
-yarn test            # run all tests
+yarn build            # webpack build (all workspaces)
+yarn prepare:db       # seed DB from pg_seed/ (requires build)
+yarn start            # run the built API server (port 3000)
+yarn start:frontend   # webpack frontend dev server (port 5173)
+yarn start:watch      # dev mode — tsx hot-reload, no build needed
+yarn test             # vitest run
+yarn lint:fix         # fix lint issues across all workspaces
+yarn format:fix       # fix formatting across all workspaces
+yarn typecheck        # tsc --noEmit
+yarn license:generate # regenerate license info after dep changes
 ```
 
 API docs: **http://localhost:3000/swagger**

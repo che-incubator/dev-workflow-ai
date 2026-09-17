@@ -55,7 +55,6 @@ metadata:
     controller.devfile.io/mount-as: env
 data:
   GEMINI_API_KEY: $(echo -n 'your_gemini_key' | base64)
-  GEMINI_MODEL: $(echo -n 'gemini-3.6-flash' | base64)
 type: Opaque
 EOF
 ----

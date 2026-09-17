@@ -1,5 +1,5 @@
 :_content-type: REFERENCE
-:description: Configure agent defaults, AI providers, daily autorun, and knowledge sources.
+:description: Configure agent defaults, AI providers, and daily autorun.
 :keywords: settings, configuration, LLM, autorun, providers, knowledge
 :navtitle: Settings
 
@@ -7,7 +7,7 @@
 = Settings
 
 [role="_abstract"]
-The *Settings* page is divided into four sections: Agent Defaults, AI Providers, Daily Autorun, and Knowledge Sources.
+The *Settings* page is divided into three sections: Agent Defaults, AI Providers, and Daily Autorun.
 
 == Agent defaults
 
@@ -49,67 +49,20 @@ Click *+ Add provider* to configure a new backend (Vertex AI, Gemini, or Ollama)
 
 == Daily autorun
 
-Automatically pick and run one issue at scheduled times each day.
+Automatically pick and run one issue at scheduled times on selected days of the week.
 
 .Daily autorun scheduler
-image::settings__Daily_Autorun.png[Daily autorun — enabled with 09:00 schedule]
+image::settings__Daily_Autorun.png[Daily autorun — enabled with schedule and active days]
 
-Enable the toggle to activate the scheduler. Add one or more scheduled times in `HH:MM` format. The agent will pick the highest-scoring eligible issue and run the full loop at each scheduled time.
+Enable the toggle to activate the scheduler, then configure:
 
-Click *Force start now* to trigger an immediate autorun outside the schedule.
+Scheduled times (HH:MM)::
+Add one or more times. The agent will pick the highest-scoring eligible issue and run the full loop at each scheduled time.
 
-== Knowledge sources
+Active days::
+Select which days of the week the autorun should fire. By default, Monday through Friday are checked; Saturday and Sunday are off.
 
-View and manage knowledge packs loaded from `pg_seed/`.
-
-.Knowledge sources
-image::settings__Knowledge_Sources.png[Knowledge sources panel]
-
-Knowledge packs contain project context, rules, and skills that the agent uses during analysis and implementation. They are loaded into the database on startup from the `pg_seed/eclipse-che/` directory.
-
-To populate knowledge sources, run `yarn prepare:db` after building. This seeds the database with all knowledge packs found under `pg_seed/`.
-
-=== What can be added
-
-Each subproject directory under `pg_seed/eclipse-che/subprojects/<name>/` can contain:
-
-`context.md`::
-Project description, tech stack, repository structure, and local path. This is the primary file the agent reads before any work on that subproject.
-
-`rules/dev.md`::
-Development rules — commit format, CSS ordering conventions, license regeneration triggers.
-
-`skills/`::
-Per-project skills such as `fix-issue`, `review-pr`, `fix-cve-dep`, and `pr-description`. Each skill has a `SKILL.md` file with step-by-step instructions.
-
-=== Directory structure example
-
-[source]
-----
-pg_seed/eclipse-che/
-├── context/
-│   └── eclipse-che-ecosystem.md   <1>
-├── shared/
-│   ├── rules/                     <2>
-│   ├── skills/                    <3>
-│   └── sources.md                 <4>
-└── subprojects/
-    └── che-dashboard/
-        ├── context.md             <5>
-        ├── context-patternfly.md  <6>
-        ├── rules/dev.md           <7>
-        └── skills/                <8>
-----
-<1> Ecosystem-level knowledge shared across all subprojects
-<2> Shared rules: commit conventions, issue filtering, CVE batching
-<3> Shared skills: `run-loop`, `pick-issue`, `filter-issues`
-<4> Default issue sources (Jira, GitHub)
-<5> Project-specific context — tech stack, dir structure, API routes
-<6> Additional context — PatternFly component usage patterns
-<7> Project-specific dev rules
-<8> Project-specific skills — `fix-issue`, `review-pr`, etc.
-
-Use *Export to JSON* to download the current knowledge pack configuration.
+Click *Force start now* to trigger an immediate autorun regardless of the schedule or active days.
 
 .Additional resources
 

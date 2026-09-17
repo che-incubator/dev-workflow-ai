@@ -9,13 +9,76 @@
 [role="_abstract"]
 Register a new subproject so the agent can analyze issues, implement fixes, and open pull requests for it.
 
+== Required directory structure
+
+Each subproject lives under `pg_seed/eclipse-che/subprojects/<name>/` and must contain a `context.md`, a `rules/` directory, and a `skills/` directory with at least three core skills:
+
+[source]
+----
+pg_seed/eclipse-che/subprojects/<name>/
+├── context.md                <1>
+├── rules/
+│   └── dev.md                <2>
+└── skills/
+    ├── analyze-issue/
+    │   └── SKILL.md           <3>
+    ├── fix-issue/
+    │   └── SKILL.md           <4>
+    └── review-pr/
+        └── SKILL.md           <5>
+----
+<1> Project context — tech stack, directory structure, key files, frontmatter metadata
+<2> Development rules — commit format, test commands, lint conventions
+<3> Analyze skill — how to parse issue context, map affected files, reproduce the problem
+<4> Fix skill — how to implement a fix: branch, code, test, lint
+<5> Review skill — how to review a PR diff against project-specific rules
+
+Here is a real example — `che-docs`:
+
+[source]
+----
+pg_seed/eclipse-che/subprojects/che-docs/
+├── context.md
+├── rules/
+│   └── dev.md
+└── skills/
+    ├── analyze-issue/SKILL.md
+    ├── fix-issue/SKILL.md
+    └── review-pr/SKILL.md
+----
+
+Projects with richer needs (like `che-dashboard`) can add extra context files and skills:
+
+[source]
+----
+pg_seed/eclipse-che/subprojects/che-dashboard/
+├── context.md
+├── context-patternfly.md     <1>
+├── context-pr-template.md    <2>
+├── rules/
+│   └── dev.md
+└── skills/
+    ├── analyze-issue/SKILL.md
+    ├── fix-issue/SKILL.md
+    ├── fix-cve-dep/SKILL.md  <3>
+    ├── pr-description/SKILL.md
+    ├── pr-test-section/SKILL.md
+    └── review-pr/SKILL.md
+----
+<1> Additional context for PatternFly component usage patterns
+<2> PR template and conventions
+<3> Skill for fixing CVE dependency issues
+
 .Procedure
 
-. Create the subproject directory:
+. Create the subproject directory with the required structure:
 +
 [source,bash]
 ----
-mkdir -p pg_seed/eclipse-che/subprojects/<name>
+mkdir -p pg_seed/eclipse-che/subprojects/<name>/rules
+mkdir -p pg_seed/eclipse-che/subprojects/<name>/skills/analyze-issue
+mkdir -p pg_seed/eclipse-che/subprojects/<name>/skills/fix-issue
+mkdir -p pg_seed/eclipse-che/subprojects/<name>/skills/review-pr
 ----
 
 . Create `context.md` with YAML frontmatter:
@@ -30,6 +93,9 @@ description: One-line description of the project
 auto_approve_min_priority: major
 story_point_budget: 3
 local_path: .repos/<org>/<repo>
+commands:
+  test: "yarn test"
+  lint: "yarn lint:check"
 issue_source: https://github.com/<org>/<repo>/issues
 ---
 # <name> — AI Context File
@@ -49,18 +115,41 @@ List the key directories and their purpose...
 List the important files the agent should know about...
 ----
 
-. _(Optional)_ Add project-specific rules at `rules/dev.md`:
+. Create `rules/dev.md` with project-specific development rules:
 +
-[source,asciidoc]
+[source,markdown]
 ----
 # Dev Rules — <name>
 
-- Commit format: ...
-- Run tests with: ...
-- License compliance: ...
+## Commit format
+- Subject ≤ 50 chars: `type(scope): description`
+
+## Test commands
+- `yarn test` — run all tests
+
+## Lint
+- `yarn lint:check` — check lint issues
+
+## License
+- Run `yarn license:generate` after any dependency change
 ----
 
-. _(Optional)_ Add project-specific skills under `skills/<skill-name>/SKILL.md`.
+. Create the three core skills. Each `SKILL.md` file contains step-by-step instructions the agent follows. Use an existing subproject as a reference:
++
+[source,bash]
+----
+# Copy from an existing subproject and adapt:
+cp pg_seed/eclipse-che/subprojects/che-docs/skills/analyze-issue/SKILL.md \
+   pg_seed/eclipse-che/subprojects/<name>/skills/analyze-issue/SKILL.md
+
+cp pg_seed/eclipse-che/subprojects/che-docs/skills/fix-issue/SKILL.md \
+   pg_seed/eclipse-che/subprojects/<name>/skills/fix-issue/SKILL.md
+
+cp pg_seed/eclipse-che/subprojects/che-docs/skills/review-pr/SKILL.md \
+   pg_seed/eclipse-che/subprojects/<name>/skills/review-pr/SKILL.md
+----
++
+Then edit each `SKILL.md` to match the new project's conventions.
 
 . Add the project to `pg_seed/eclipse-che/projects.json`:
 +
@@ -95,5 +184,5 @@ The new project should appear on the *Subprojects* page with its GitHub avatar a
 
 .Additional resources
 
-* xref:architecture:knowledge-packs.adoc[]
-* xref:writing-skills.adoc[]
+* xref:architecture:knowledge-packs.adoc[Knowledge packs]
+* xref:writing-skills.adoc[Writing skills]
