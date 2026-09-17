@@ -236,13 +236,28 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
     let patchPath = '';
     if (state.repoLocal && state.branchName) {
       try {
-        const { stdout } = await execAsync(
-          `git -C ${JSON.stringify(state.repoLocal)} diff main...${state.branchName}`,
-          { timeout: 30_000 },
-        );
-        if (stdout.trim()) {
+        let patch = '';
+        try {
+          const { stdout } = await execAsync(
+            `git -C ${JSON.stringify(state.repoLocal)} diff main...${state.branchName}`,
+            { timeout: 30_000 },
+          );
+          patch = stdout;
+        } catch { /* branch may not exist yet */ }
+
+        if (!patch.trim()) {
+          try {
+            const { stdout } = await execAsync(
+              `git -C ${JSON.stringify(state.repoLocal)} diff HEAD`,
+              { timeout: 30_000 },
+            );
+            patch = stdout;
+          } catch { /* non-fatal */ }
+        }
+
+        if (patch.trim()) {
           patchPath = join(outDir, 'changes.patch');
-          await writeFile(patchPath, stdout, 'utf8');
+          await writeFile(patchPath, patch, 'utf8');
         }
       } catch {
         patchPath = join(outDir, 'changes.patch');

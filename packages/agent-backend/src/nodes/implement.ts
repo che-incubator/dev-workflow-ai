@@ -319,6 +319,7 @@ After completing all steps, reply with JSON:
       }
       const passed = result.exitCode === 0;
       return {
+        repoLocal,
         filesChanged: state.affectedFiles,
         testsPassed: passed,
         lintPassed: passed,
@@ -401,6 +402,7 @@ MANDATORY final response — JSON only, no markdown:
     }
 
     return {
+      repoLocal,
       testsPassed: false,
       lintPassed: false,
       retryCount: newRetry,
@@ -416,13 +418,30 @@ MANDATORY final response — JSON only, no markdown:
     };
     const allPassed = parsed.testsPassed && parsed.lintPassed;
 
-    // Generate real patch from the branch
+    // Generate real patch from the branch (committed + uncommitted changes)
     if (state.dryRun && state.outputDir && repoLocal) {
       try {
-        const { stdout: patch } = await execAsync(`git diff main...${state.branchName}`, {
-          cwd: repoLocal,
-          timeout: 30_000,
-        });
+        let patch = '';
+        // Try committed changes first
+        try {
+          const { stdout } = await execAsync(
+            `git diff main...${state.branchName}`,
+            { cwd: repoLocal, timeout: 30_000 },
+          );
+          patch = stdout;
+        } catch { /* branch may not exist yet */ }
+
+        // Fall back to uncommitted changes (staged + unstaged)
+        if (!patch.trim()) {
+          try {
+            const { stdout } = await execAsync('git diff HEAD', {
+              cwd: repoLocal,
+              timeout: 30_000,
+            });
+            patch = stdout;
+          } catch { /* non-fatal */ }
+        }
+
         if (patch.trim()) {
           const slug = `${state.repoSlug.replace('/', '-')}-${state.issueNumber ?? 'unknown'}`;
           const outDir = resolve(state.outputDir, slug);
@@ -435,6 +454,7 @@ MANDATORY final response — JSON only, no markdown:
     }
 
     return {
+      repoLocal,
       filesChanged: parsed.filesChanged ?? [],
       testsPassed: parsed.testsPassed,
       lintPassed: parsed.lintPassed,
@@ -445,6 +465,7 @@ MANDATORY final response — JSON only, no markdown:
     };
   } catch {
     return {
+      repoLocal,
       testsPassed: false,
       lintPassed: false,
       retryCount: state.retryCount + 1,
