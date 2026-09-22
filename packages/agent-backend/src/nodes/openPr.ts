@@ -32,112 +32,65 @@ const agentName = () =>
         ? `Gemini ${process.env.GEMINI_MODEL ?? 'gemini-3.6-flash'}`
         : `Ollama ${process.env.OLLAMA_MODEL ?? 'qwen2.5-coder:32b'}`;
 
-// ── PR description builder using the che-dashboard PR template ────────────────
+// ── PR description builder — LLM generates full body using project-specific skills ──
 
 async function buildPrDescription(state: State, isDraft: boolean): Promise<string> {
   const isBatch = state.isBatch && (state.batchIssues ?? []).length > 0;
   const batchIssues = state.batchIssues ?? [];
 
-  // Load PR template and description skill — only what the PR writer needs
   const prContext = await loadContext(state.project, [
-    'context-pr-template', // .github/PULL_REQUEST_TEMPLATE.md
-    'skills-pr-description', // writing style guide
-    'skills-pr-test-section', // test section templates
-  ]).catch(() => ''); // non-fatal — fall back to template if context not loaded
+    'context-pr-template',
+    'skills-pr-description',
+    'skills-pr-test-section',
+  ]).catch(() => '');
 
-  // Generate "What does this PR do?" using LLM for richer content
-  let whatItDoes = state.fixSummary;
+  const issueRefs = isBatch
+    ? batchIssues.map(i => `fixes ${i.url}`).join('\n')
+    : `fixes ${state.issueUrl || (state.issueNumber ? `https://github.com/${state.repoSlug}/issues/${state.issueNumber}` : '')}`;
+
+  const assistedBy = `Assisted-by: ${agentName()}`;
+
+  const metadata = [
+    `Project: ${state.project} (${state.repoSlug})`,
+    `Fix summary: ${state.fixSummary}`,
+    `Area: ${state.area}`,
+    `Changed files: ${state.affectedFiles.join(', ')}`,
+    `Tests passed: ${state.testsPassed}`,
+    `Lint passed: ${state.lintPassed}`,
+    `Issue references:\n${issueRefs}`,
+    isDraft ? 'Draft PR — not all checks passed locally.' : '',
+    isBatch
+      ? `Batch CVE mode: ${batchIssues.length} issues\nCVE issues:\n${batchIssues.map(i => `- ${i.jiraKey ?? i.url.split('/').pop()}: ${i.title ?? '(CVE fix)'}`).join('\n')}`
+      : '',
+  ].filter(Boolean);
+
   try {
-    const context = isBatch
-      ? `Batch CVE dependency upgrade PR for eclipse-che/che-dashboard.
-Fix summary: ${state.fixSummary}
-CVE issues fixed (Jira keys and titles):
-${batchIssues.map(i => `- ${i.jiraKey ?? i.url.split('/').pop()}: ${i.title ?? '(CVE fix)'}`).join('\n')}
-Changed files: ${state.affectedFiles.join(', ')}`
-      : `che-dashboard PR. Fix summary: ${state.fixSummary}
-Area: ${state.area}. Changed files: ${state.affectedFiles.join(', ')}`;
-
     const resp = await llmDeep.invoke([
       new HumanMessage(
-        `${prContext ? `PROJECT PR CONVENTIONS:\n${prContext}\n\n` : ''}Write the "What does this PR do?" section for a GitHub PR description.
-Follow this style:
-- Lead with an action verb (Upgrades / Fixes / Adds / Removes)
-- For batch dep upgrades: numbered bold list, each entry = package + what CVE it fixes
-- Be specific about versions and CVE IDs from the issue titles
-- 3-8 lines total, no fluff, no passive voice
+        `${prContext ? `PROJECT PR CONVENTIONS AND SKILLS:\n${prContext}\n\n` : ''}You are writing a GitHub PR description for the ${state.project} project.
 
-PR context:
-${context}
+PR METADATA:
+${metadata.join('\n')}
 
-Respond with ONLY the section content (no heading, no markdown code fences).`,
+INSTRUCTIONS:
+- Follow the project's PR template structure exactly (from the context-pr-template above).
+- Use the pr-description skill for writing style (action verb lead, Root Cause + Fix for bugs, numbered bold list for multiple changes).
+- Use the pr-test-section skill to write the test section — pick the template that matches the change type.
+- Fill in issue references exactly as given above.
+- End with a trailer line: ${assistedBy}
+${isDraft ? '- Add a note: "> ⚠️ Draft — not all checks passed locally."' : ''}
+
+Write the COMPLETE PR body. No markdown code fences around the output. Output ONLY the PR body content.`,
       ),
     ]);
     logTokenUsage('openPr', resp);
     const text = typeof resp.content === 'string' ? resp.content : JSON.stringify(resp.content);
-    if (text.trim()) whatItDoes = text.trim();
+    if (text.trim()) return text.trim();
   } catch {
-    // Fall back to fixSummary
+    // Fall through to fallback
   }
 
-  // Issues fixed list
-  const fixLines = isBatch
-    ? batchIssues.map(i => `fixes ${i.url}`).join('\n')
-    : `fixes ${state.issueUrl || (state.issueNumber ? `https://github.com/${state.repoSlug}/issues/${state.issueNumber}` : '')}`;
-
-  // Test plan — Template 4 (Dependency / CVE upgrade) from pr-test-section skill
-  const isDepUpgrade = isBatch || /upgrad\w+|vulnerabilit|CVE/i.test(state.fixSummary);
-  const pkgList =
-    state.affectedFiles
-      .filter(f => f.endsWith('package.json'))
-      .map(f => f.replace('packages/', '').replace('/package.json', ''))
-      .join(', ') || 'see package.json';
-  const testPlan = isDepUpgrade
-    ? `- No runtime logic changed — pure dependency upgrade.
-- \`yarn install\` resolves cleanly.
-- \`yarn license:generate\` completes without unresolved dependencies (\`${pkgList}\` updated in \`.deps/\` files).
-- \`yarn license:check\` passes.
-- \`yarn build\` succeeds with no new errors.
-- \`yarn test\` passes — all suites green.`
-    : `1. Deploy Eclipse Che with the dashboard image from this PR.
-2. Navigate to the affected area.
-3. Verify: ${state.fixSummary.toLowerCase()}
-- \`yarn test\` passes in changed packages.`;
-
-  // Commit trailers (for the "Is it tested?" section attribution)
-  const assistedBy = `Assisted-by: ${agentName()}`;
-
-  return `### What does this PR do?
-
-${whatItDoes}
-
-### Screenshot/screencast of this PR
-
-${isDepUpgrade ? 'N/A — pure dependency upgrade, no UI changes.' : '<!-- Add screenshot or screencast if this changes UI -->'}
-
-### What issues does this PR fix or reference?
-
-${fixLines}
-
-### Is it tested? How?
-
-${testPlan}
-
-#### Release Notes
-
-${
-  isDepUpgrade
-    ? 'Updated vulnerable npm dependencies to address security vulnerabilities.'
-    : state.fixSummary
-}
-
-#### Docs PR
-
-N/A
-${isDraft ? '\n> ⚠️ Draft — not all checks passed locally.' : ''}
-
----
-${assistedBy}
-`;
+  return `### What does this PR do?\n\n${state.fixSummary}\n\n### What issues does this PR fix or reference?\n\n${issueRefs}\n\n---\n${assistedBy}`;
 }
 
 async function git(cmd: string, cwd: string): Promise<string> {
