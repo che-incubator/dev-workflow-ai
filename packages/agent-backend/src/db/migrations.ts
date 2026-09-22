@@ -138,6 +138,17 @@ const MIGRATIONS = [
        ALTER TABLE projects RENAME COLUMN slug TO name;
      END IF;
    END $$`,
+
+  `ALTER TABLE issues ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`,
+
+  `CREATE TABLE IF NOT EXISTS issue_plans (
+    id SERIAL PRIMARY KEY,
+    issue_id INT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    content TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(issue_id)
+  )`,
 ];
 
 export async function runMigrations(): Promise<void> {

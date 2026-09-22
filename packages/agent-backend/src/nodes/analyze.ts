@@ -87,6 +87,28 @@ export async function analyzeNode(state: State): Promise<Partial<State>> {
     issueBody = await fetchIssueBody(state.repoSlug, state.issueNumber);
   }
 
+  // Load the short plan from issue_plans table if one exists
+  try {
+    const { db: planDb } = await import('../db/client.js');
+    const issueIdQuery = state.issueUrl
+      ? `SELECT ip.content FROM issue_plans ip JOIN issues i ON ip.issue_id = i.id WHERE i.url = $1 LIMIT 1`
+      : state.jiraKey
+        ? `SELECT ip.content FROM issue_plans ip JOIN issues i ON ip.issue_id = i.id WHERE i.external_id = $1 LIMIT 1`
+        : null;
+    if (issueIdQuery) {
+      const { rows: planRows } = await planDb.query<{ content: string }>(
+        issueIdQuery,
+        [state.issueUrl || state.jiraKey],
+      );
+      if (planRows[0]?.content) {
+        issueBody += `\n\n---\n## Implementation Plan\n\n${planRows[0].content}`;
+        nodeLog('analyze: loaded short plan from DB');
+      }
+    }
+  } catch {
+    /* non-fatal */
+  }
+
   const issueRef = state.jiraKey
     ? `Jira issue ${state.jiraKey}`
     : state.issueNumber

@@ -12,6 +12,7 @@
 
 import { db } from '../db/client.js';
 import type { ProjectRow } from '../db/schema.js';
+import { nodeLog } from '../agent/runner.js';
 
 export async function loadContext(projectSlug: string, filter?: string[]): Promise<string> {
   let query = `
@@ -49,8 +50,12 @@ export async function loadContext(projectSlug: string, filter?: string[]): Promi
   const { rows } = await db.query<{ name: string; content: string }>(query, params);
 
   if (rows.length === 0) {
+    nodeLog(`context: no documents found for project "${projectSlug}"`);
     return `No context found for project "${projectSlug}"`;
   }
+
+  const names = rows.map(r => r.name);
+  nodeLog(`context: loaded ${rows.length} documents for "${projectSlug}": ${names.join(', ')}`);
 
   return rows.map(r => `## ${r.name}\n\n${r.content}`).join('\n\n---\n\n');
 }

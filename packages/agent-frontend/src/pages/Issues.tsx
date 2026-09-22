@@ -27,10 +27,16 @@ import {
   FlexItem,
   Label,
   MenuToggle,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
   PageSection,
+  Popover,
   SearchInput,
   Spinner,
   Switch,
+  TextArea,
   TextInput,
   Title,
   ToggleGroup,
@@ -40,20 +46,24 @@ import {
   ToolbarItem,
   Tooltip,
 } from '@patternfly/react-core';
-import { CubesIcon, EllipsisVIcon, TrashIcon } from '@patternfly/react-icons';
+import { CubesIcon, EllipsisVIcon, FileAltIcon, TrashIcon } from '@patternfly/react-icons';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@patternfly/react-table';
+import Markdown from 'react-markdown';
 import { useAlerts } from '../contexts/AlertContext.js';
 import {
   addSource,
   AgentRun,
   deleteIssue,
+  deleteIssuePlan,
   deleteSource,
   getAllIssues,
+  getIssuePlans,
   getRuns,
   getSources,
   IssueSource,
   importIssue,
   refreshIssue,
+  saveIssuePlan,
   startRun,
   StoredIssue,
   syncSource,
@@ -97,6 +107,141 @@ function shortenIssueUrl(url: string): string {
   const jiraMatch = url.match(/\/browse\/([A-Z]+-\d+)/);
   if (jiraMatch) return jiraMatch[1];
   return url.replace(/^https?:\/\/[^/]+/, '').slice(0, 50) || url;
+}
+
+// ── Plan cell (icon + popover) ────────────────────────────────────────────
+
+function PlanCell({ content }: { content: string | undefined }) {
+  const [hovered, setHovered] = useState(false);
+
+  if (!content) {
+    return (
+      <span style={{ color: 'var(--pf-t--global--text--color--subtle)', fontSize: '0.85rem' }}>
+        —
+      </span>
+    );
+  }
+  return (
+    <Popover
+      headerContent="Short plan"
+      bodyContent={
+        <div style={{ maxWidth: '440px', maxHeight: '320px', overflow: 'auto', fontSize: '0.85rem' }}>
+          <Markdown>{content}</Markdown>
+        </div>
+      }
+      position="bottom"
+    >
+      <button
+        aria-label="View plan"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          background: hovered ? 'var(--pf-t--global--background--color--hover)' : 'none',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          color: 'var(--pf-t--global--icon--color--regular)',
+          padding: '4px 6px',
+        }}
+      >
+        <FileAltIcon />
+      </button>
+    </Popover>
+  );
+}
+
+// ── Plan editor modal ────────────────────────────────────────────────────
+
+const PLAN_TEMPLATE = '### Short plan of implementation\n\n';
+
+function PlanEditorModal({
+  issueId,
+  issueTitle,
+  initialContent,
+  isOpen,
+  onClose,
+  onSaved,
+}: {
+  issueId: number;
+  issueTitle: string;
+  initialContent: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved: (issueId: number, content: string | null) => void;
+}) {
+  const { addAlert } = useAlerts();
+  const [content, setContent] = useState(initialContent || PLAN_TEMPLATE);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setContent(initialContent || PLAN_TEMPLATE);
+  }, [initialContent, isOpen]);
+
+  async function handleSave(): Promise<void> {
+    setSaving(true);
+    try {
+      await saveIssuePlan(issueId, content);
+      addAlert('success', 'Plan saved');
+      onSaved(issueId, content);
+      onClose();
+    } catch (e) {
+      addAlert('danger', e instanceof Error ? e.message : 'Failed to save plan');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(): Promise<void> {
+    setSaving(true);
+    try {
+      await deleteIssuePlan(issueId);
+      addAlert('success', 'Plan removed');
+      onSaved(issueId, null);
+      onClose();
+    } catch (e) {
+      addAlert('danger', e instanceof Error ? e.message : 'Failed to delete plan');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      aria-label="Edit short plan"
+      variant="medium"
+    >
+      <ModalHeader
+        title={initialContent ? 'Edit short plan' : 'Add short plan'}
+        description={issueTitle}
+      />
+      <ModalBody>
+        <TextArea
+          id="plan-editor"
+          value={content}
+          onChange={(_e, v) => setContent(v)}
+          aria-label="Plan content"
+          rows={16}
+          resizeOrientation="vertical"
+          style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+        />
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="primary" onClick={handleSave} isDisabled={saving || !content.trim()}>
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
+        {initialContent && (
+          <Button variant="danger" onClick={handleDelete} isDisabled={saving}>
+            Delete plan
+          </Button>
+        )}
+        <Button variant="link" onClick={onClose}>
+          Cancel
+        </Button>
+      </ModalFooter>
+    </Modal>
+  );
 }
 
 // ── QueueItem ─────────────────────────────────────────────────────────────
@@ -422,7 +567,15 @@ function IssuesSourcesSection({
 
 // ── Issue Picker section ──────────────────────────────────────────────────
 
-function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void }) {
+function IssuePickerSection({
+  onIssueImported,
+  plans,
+  onPlanChanged,
+}: {
+  onIssueImported?: () => void;
+  plans: Record<number, string>;
+  onPlanChanged: (issueId: number, content: string | null) => void;
+}) {
   const { addAlert } = useAlerts();
   const [inputUrl, setInputUrl] = useState('');
   const [forceP, setForceP] = useState(false);
@@ -437,6 +590,11 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
   const [queueFilter, setQueueFilter] = useState('');
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [openKebab, setOpenKebab] = useState<string | null>(null);
+  const [planModal, setPlanModal] = useState<{
+    issueId: number;
+    title: string;
+    content: string;
+  } | null>(null);
 
   useEffect(() => {
     localStorage.setItem('dwa_picker_queue', JSON.stringify(queue));
@@ -662,6 +820,7 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
                 />
                 <Th>Issue</Th>
                 <Th>Title</Th>
+                <Th>Plan</Th>
                 <Th>Mode</Th>
                 <Th screenReaderText="Actions" />
               </Tr>
@@ -715,6 +874,13 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
                     )}
                   </Td>
                   <Td>
+                    {item.issueId != null ? (
+                      <PlanCell content={plans[item.issueId]} />
+                    ) : (
+                      <span style={{ color: 'var(--pf-t--global--text--color--subtle)' }}>—</span>
+                    )}
+                  </Td>
+                  <Td>
                     <Label color={item.forceP ? 'orange' : 'blue'} isCompact>
                       {item.forceP ? 'force' : 'auto'}
                     </Label>
@@ -746,6 +912,20 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
                         >
                           {starting === item.key ? 'Starting…' : 'Force run'}
                         </DropdownItem>
+                        {item.issueId != null && (
+                          <DropdownItem
+                            onClick={() => {
+                              setPlanModal({
+                                issueId: item.issueId!,
+                                title: item.title,
+                                content: plans[item.issueId!] ?? '',
+                              });
+                              setOpenKebab(null);
+                            }}
+                          >
+                            {plans[item.issueId] ? 'Edit short plan' : 'Add short plan'}
+                          </DropdownItem>
+                        )}
                         <DropdownItem
                           onClick={() => {
                             handleTogglePriority(item.key);
@@ -770,6 +950,16 @@ function IssuePickerSection({ onIssueImported }: { onIssueImported?: () => void 
               ))}
             </Tbody>
           </Table>
+        )}
+        {planModal && (
+          <PlanEditorModal
+            issueId={planModal.issueId}
+            issueTitle={planModal.title}
+            initialContent={planModal.content}
+            isOpen={true}
+            onClose={() => setPlanModal(null)}
+            onSaved={onPlanChanged}
+          />
         )}
       </CardBody>
     </Card>
@@ -840,14 +1030,23 @@ function AllIssuesSection({
   loading,
   activeIssueUrls,
   onRunStarted,
+  plans,
+  onPlanChanged,
 }: {
   issues: StoredIssue[];
   loading: boolean;
   activeIssueUrls: Set<string>;
   onRunStarted: () => void;
+  plans: Record<number, string>;
+  onPlanChanged: (issueId: number, content: string | null) => void;
 }) {
   const { addAlert } = useAlerts();
   const [view, setView] = useState<IssueView>('all');
+  const [planModal, setPlanModal] = useState<{
+    issueId: number;
+    title: string;
+    content: string;
+  } | null>(null);
 
   const cveIssues = useMemo(
     () =>
@@ -873,6 +1072,7 @@ function AllIssuesSection({
   const COL_OPENED = 2;
   const COL_PRIORITY = 4;
   const COL_SP = 5;
+  const COL_PLAN = 6;
   const PRIORITY_ORDER: Record<string, number> = { critical: 0, major: 1, minor: 2, trivial: 3 };
 
   React.useEffect(() => {
@@ -887,7 +1087,7 @@ function AllIssuesSection({
       list = [...list].sort((a, b) => {
         let cmp = 0;
         if (sortCol === COL_OPENED)
-          cmp = new Date(a.fetched_at).getTime() - new Date(b.fetched_at).getTime();
+          cmp = new Date(a.created_at ?? a.fetched_at).getTime() - new Date(b.created_at ?? b.fetched_at).getTime();
         if (sortCol === COL_PRIORITY)
           cmp = (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
         if (sortCol === COL_SP) cmp = (a.story_points || 0) - (b.story_points || 0);
@@ -1048,7 +1248,7 @@ function AllIssuesSection({
                 >
                   Opened
                 </Th>
-                <Th>Labels</Th>
+                <Th style={{ width: '160px' }}>Labels</Th>
                 <Th
                   sort={{
                     sortBy,
@@ -1058,7 +1258,7 @@ function AllIssuesSection({
                       setSortDir(dir);
                     },
                   }}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', width: '100px' }}
                 >
                   Priority
                 </Th>
@@ -1075,6 +1275,7 @@ function AllIssuesSection({
                 >
                   SP
                 </Th>
+                <Th>Plan</Th>
                 <Th screenReaderText="Actions" />
               </Tr>
             </Thead>
@@ -1127,10 +1328,10 @@ function AllIssuesSection({
                         fontSize: '0.85rem',
                       }}
                     >
-                      {formatOpened(issue.fetched_at)}
+                      {formatOpened(issue.created_at ?? issue.fetched_at)}
                     </Td>
-                    <Td>
-                      <Flex gap={{ default: 'gapXs' }}>
+                    <Td style={{ width: '160px' }}>
+                      <Flex gap={{ default: 'gapXs' }} flexWrap={{ default: 'wrap' }}>
                         {issue.labels.slice(0, 3).map(l => (
                           <FlexItem key={l}>
                             <Label isCompact>{l}</Label>
@@ -1152,6 +1353,9 @@ function AllIssuesSection({
                       )}
                     </Td>
                     <Td>{issue.story_points || '?'}</Td>
+                    <Td>
+                      <PlanCell content={plans[issue.id]} />
+                    </Td>
                     <Td isActionCell>
                       <Dropdown
                         isOpen={openKebab === issue.id}
@@ -1178,6 +1382,18 @@ function AllIssuesSection({
                             }}
                           >
                             {isRunning ? 'Running…' : isStarting ? 'Starting…' : 'Force run'}
+                          </DropdownItem>
+                          <DropdownItem
+                            onClick={() => {
+                              setPlanModal({
+                                issueId: issue.id,
+                                title: issue.title,
+                                content: plans[issue.id] ?? '',
+                              });
+                              setOpenKebab(null);
+                            }}
+                          >
+                            {plans[issue.id] ? 'Edit short plan' : 'Add short plan'}
                           </DropdownItem>
                           {view === 'prioritized' && !isRunning && (
                             <DropdownItem
@@ -1218,6 +1434,16 @@ function AllIssuesSection({
             </Tbody>
           </Table>
         )}
+        {planModal && (
+          <PlanEditorModal
+            issueId={planModal.issueId}
+            issueTitle={planModal.title}
+            initialContent={planModal.content}
+            isOpen={true}
+            onClose={() => setPlanModal(null)}
+            onSaved={onPlanChanged}
+          />
+        )}
       </CardBody>
     </Card>
   );
@@ -1229,6 +1455,7 @@ export default function Issues() {
   const [sources, setSources] = useState<IssueSource[]>([]);
   const [issues, setIssues] = useState<StoredIssue[]>([]);
   const [activeRuns, setActiveRuns] = useState<AgentRun[]>([]);
+  const [plans, setPlans] = useState<Record<number, string>>({});
   const [srcLoading, setSrcLoading] = useState(true);
   const [issueLoading, setIssueLoading] = useState(true);
 
@@ -1260,15 +1487,35 @@ export default function Issues() {
     }
   }, []);
 
+  const loadPlans = useCallback(async () => {
+    try {
+      setPlans(await getIssuePlans());
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   function handleReload(): void {
     loadSources();
     loadIssues();
     loadRuns();
+    loadPlans();
   }
+
+  const handlePlanChanged = useCallback((issueId: number, content: string | null) => {
+    setPlans(prev => {
+      const next = { ...prev };
+      if (content) {
+        next[issueId] = content;
+      } else {
+        delete next[issueId];
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     handleReload();
-    // Poll running runs every 10s so buttons auto-enable when runs finish
     const id = setInterval(loadRuns, 10_000);
     return () => clearInterval(id);
   }, []);
@@ -1291,7 +1538,11 @@ export default function Issues() {
       </PageSection>
 
       <PageSection>
-        <IssuePickerSection onIssueImported={loadIssues} />
+        <IssuePickerSection
+          onIssueImported={loadIssues}
+          plans={plans}
+          onPlanChanged={handlePlanChanged}
+        />
       </PageSection>
 
       <PageSection>
@@ -1300,6 +1551,8 @@ export default function Issues() {
           loading={issueLoading}
           activeIssueUrls={activeIssueUrls}
           onRunStarted={loadRuns}
+          plans={plans}
+          onPlanChanged={handlePlanChanged}
         />
       </PageSection>
     </>

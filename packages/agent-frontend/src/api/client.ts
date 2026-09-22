@@ -89,6 +89,7 @@ export interface StoredIssue {
   status: string;
   score: number;
   story_points: number;
+  created_at: string | null;
   fetched_at: string;
   source_label: string;
   source_kind: string;
@@ -125,6 +126,19 @@ export const refreshIssue = (url: string) =>
     method: 'POST',
     body: JSON.stringify({ url }),
   });
+
+// ── Issue Plans ──────────────────────────────────────────────────────────
+
+export const getIssuePlans = () => apiFetch<Record<number, string>>('/sources/issues/plans');
+export const getIssuePlan = (issueId: number) =>
+  apiFetch<{ content: string }>(`/sources/issues/${issueId}/plan`).catch(() => null);
+export const saveIssuePlan = (issueId: number, content: string) =>
+  apiFetch<{ ok: boolean }>(`/sources/issues/${issueId}/plan`, {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  });
+export const deleteIssuePlan = (issueId: number) =>
+  apiFetch<void>(`/sources/issues/${issueId}/plan`, { method: 'DELETE' });
 
 // ── Runs ─────────────────────────────────────────────────────────────────
 

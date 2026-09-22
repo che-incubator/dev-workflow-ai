@@ -165,6 +165,7 @@ export async function runAgent(
 
   try {
     // ── Phase 0: pick issue (only when no issue specified) ─────────────────
+    emit({ type: 'log', node: 'runner', message: 'pipeline: starting agent run' });
     const hasIssue = state.issueNumber !== null || !!state.issueUrl || !!state.jiraKey;
     if (!hasIssue) {
       state = await step('pick_issue', state, pickIssueNode, emit);
@@ -176,6 +177,7 @@ export async function runAgent(
     }
 
     // ── Phase 1: analyze ──────────────────────────────────────────────────
+    emit({ type: 'log', node: 'runner', message: 'pipeline: phase 1 — analyze issue' });
     state = await step('analyze', state, analyzeNode, emit);
     if (aborted()) return state;
 
@@ -189,6 +191,7 @@ export async function runAgent(
     }
 
     // ── Phase 2: priority check (autonomous mode only) ────────────────────
+    emit({ type: 'log', node: 'runner', message: 'pipeline: phase 2 — priority check' });
     const skipPriority = state.issueUrl || state.jiraKey || state.forcePriority;
     if (!skipPriority) {
       state = await step('priority_check', state, priorityCheckNode, emit);
@@ -200,6 +203,7 @@ export async function runAgent(
     }
 
     // ── Phase 3: implement (with retry) ───────────────────────────────────
+    emit({ type: 'log', node: 'runner', message: 'pipeline: phase 3 — implement' });
     const implementFn = isDepUpgrade(state) ? implementDepUpgradeNode : implementNode;
     const implNodeName = isDepUpgrade(state) ? 'implement_dep_upgrade' : 'implement';
 
@@ -211,6 +215,7 @@ export async function runAgent(
     }
 
     // ── Phase 4: review + fix loop (skipped for dep upgrades) ────────────────
+    emit({ type: 'log', node: 'runner', message: 'pipeline: phase 4 — review + fix loop' });
     if (isDepUpgrade(state)) {
       emit({
         type: 'log',
@@ -238,6 +243,7 @@ export async function runAgent(
     }
 
     // ── Phase 5: open PR ──────────────────────────────────────────────────
+    emit({ type: 'log', node: 'runner', message: 'pipeline: phase 5 — open PR' });
     state = await step('open_pr', state, openPrNode, emit);
     emit({ type: 'run_complete', prUrl: state.prUrl });
     return state;

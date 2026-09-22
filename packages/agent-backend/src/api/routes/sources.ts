@@ -199,11 +199,13 @@ async function fetchGitHubIssues(repoSlug: string, sourceId: number): Promise<nu
       const { score, priority } = scoreIssue(labels, title);
       const storyPoints = estimateStoryPoints(body, title);
 
+      const createdAt = (item as { created_at?: string }).created_at ?? null;
+
       await db.query(
-        `INSERT INTO issues (source_id, external_id, title, url, body, labels, priority, assignees, status, score, story_points, raw, fetched_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'open',$9,$10,$11,now())
+        `INSERT INTO issues (source_id, external_id, title, url, body, labels, priority, assignees, status, score, story_points, raw, fetched_at, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'open',$9,$10,$11,now(),$12)
          ON CONFLICT (source_id, external_id)
-         DO UPDATE SET title=$3, url=$4, body=$5, labels=$6, priority=$7, assignees=$8, score=$9, story_points=$10, raw=$11, fetched_at=now()`,
+         DO UPDATE SET title=$3, url=$4, body=$5, labels=$6, priority=$7, assignees=$8, score=$9, story_points=$10, raw=$11, fetched_at=now(), created_at=COALESCE($12, issues.created_at)`,
         [
           sourceId,
           number,
@@ -216,6 +218,7 @@ async function fetchGitHubIssues(repoSlug: string, sourceId: number): Promise<nu
           score,
           storyPoints,
           JSON.stringify(item),
+          createdAt,
         ],
       );
       inserted++;
@@ -302,11 +305,13 @@ async function fetchJiraIssues(sourceUrl: string, sourceId: number): Promise<num
     const finalPriority = scoredPriority || priority;
     const storyPoints = estimateStoryPoints(body, title);
 
+    const jiraCreated = (fields.created as string | null) ?? null;
+
     await db.query(
-      `INSERT INTO issues (source_id, external_id, title, url, body, labels, priority, assignees, status, score, story_points, raw, fetched_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now())
+      `INSERT INTO issues (source_id, external_id, title, url, body, labels, priority, assignees, status, score, story_points, raw, fetched_at, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),$13)
        ON CONFLICT (source_id, external_id)
-       DO UPDATE SET title=$3, url=$4, body=$5, labels=$6, priority=$7, assignees=$8, status=$9, score=$10, story_points=$11, raw=$12, fetched_at=now()`,
+       DO UPDATE SET title=$3, url=$4, body=$5, labels=$6, priority=$7, assignees=$8, status=$9, score=$10, story_points=$11, raw=$12, fetched_at=now(), created_at=COALESCE($13, issues.created_at)`,
       [
         sourceId,
         key,
@@ -320,6 +325,7 @@ async function fetchJiraIssues(sourceUrl: string, sourceId: number): Promise<num
         finalScore,
         storyPoints,
         JSON.stringify(item),
+        jiraCreated,
       ],
     );
     inserted++;
@@ -467,14 +473,16 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
          ON CONFLICT (url) DO UPDATE SET label = EXCLUDED.label RETURNING *`,
           [sourceUrl, repoSlug],
         );
+        const ghCreatedAt = (gh as { created_at?: string }).created_at ?? null;
         const {
           rows: [issue],
         } = await db.query(
-          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, raw, fetched_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, raw, fetched_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $10)
          ON CONFLICT (source_id, external_id) DO UPDATE SET
            title = EXCLUDED.title, body = EXCLUDED.body, labels = EXCLUDED.labels,
-           status = EXCLUDED.status, raw = EXCLUDED.raw, fetched_at = now()
+           status = EXCLUDED.status, raw = EXCLUDED.raw, fetched_at = now(),
+           created_at = COALESCE(EXCLUDED.created_at, issues.created_at)
          RETURNING *, $9::text as source_label`,
           [
             src.id,
@@ -486,6 +494,7 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
             gh.state === 'open' ? 'open' : 'closed',
             JSON.stringify(gh),
             repoSlug,
+            ghCreatedAt,
           ],
         );
         return reply.send(issue);
@@ -543,15 +552,17 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
         const status =
           (jira.fields.status?.name ?? 'open').toLowerCase() === 'done' ? 'closed' : 'open';
         const priority = (jira.fields.priority?.name ?? '').toLowerCase();
+        const jiraCreatedAt = (jira.fields.created as string | null) ?? null;
         const {
           rows: [issue],
         } = await db.query(
-          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, raw, fetched_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+          `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, raw, fetched_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $11)
          ON CONFLICT (source_id, external_id) DO UPDATE SET
            title = EXCLUDED.title, body = EXCLUDED.body, labels = EXCLUDED.labels,
            status = EXCLUDED.status, priority = EXCLUDED.priority,
-           raw = EXCLUDED.raw, fetched_at = now()
+           raw = EXCLUDED.raw, fetched_at = now(),
+           created_at = COALESCE(EXCLUDED.created_at, issues.created_at)
          RETURNING *, $10::text as source_label`,
           [
             src.id,
@@ -564,6 +575,7 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
             priority,
             JSON.stringify(jira.fields),
             project,
+            jiraCreatedAt,
           ],
         );
         return reply.send(issue);
@@ -695,14 +707,17 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
           const { score: issScore } = scoreIssue(fields.labels ?? [], title);
           const sp = jiraStoryPoints(fields) || estimateStoryPoints(body, title);
 
+          const jCreated = (fields.created as string | null) ?? null;
+
           await db.query(
-            `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, story_points, raw, fetched_at)
-           VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, $8, $9, $10, now())
+            `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, story_points, raw, fetched_at, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, $8, $9, $10, now(), $11)
            ON CONFLICT (source_id, external_id) DO UPDATE SET
              title = EXCLUDED.title, body = EXCLUDED.body, labels = EXCLUDED.labels,
              status = 'open', priority = EXCLUDED.priority,
              score = EXCLUDED.score, story_points = EXCLUDED.story_points,
-             raw = EXCLUDED.raw, fetched_at = now()`,
+             raw = EXCLUDED.raw, fetched_at = now(),
+             created_at = COALESCE($11, issues.created_at)`,
             [
               sourceId,
               key,
@@ -714,6 +729,7 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
               issScore,
               sp,
               JSON.stringify(fields),
+              jCreated,
             ],
           );
           upserted++;
@@ -739,6 +755,60 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
       return reply.status(204).send();
     },
   );
+
+  // GET /api/sources/issues/:issueId/plan — get the short plan for an issue
+  app.get<{ Params: { issueId: string } }>(
+    '/issues/:issueId/plan',
+    { schema: { tags } },
+    async (req, reply) => {
+      const issueId = parseInt(req.params.issueId, 10);
+      const { rows } = await db.query<{ content: string }>(
+        'SELECT content FROM issue_plans WHERE issue_id = $1',
+        [issueId],
+      );
+      if (!rows[0]) return reply.status(404).send({ error: 'No plan found' });
+      return reply.send({ content: rows[0].content });
+    },
+  );
+
+  // PUT /api/sources/issues/:issueId/plan — create or update the short plan
+  app.put<{ Params: { issueId: string }; Body: { content: string } }>(
+    '/issues/:issueId/plan',
+    { schema: { tags } },
+    async (req, reply) => {
+      const issueId = parseInt(req.params.issueId, 10);
+      const { content } = req.body;
+      if (content == null) return reply.status(400).send({ error: 'content is required' });
+      await db.query(
+        `INSERT INTO issue_plans (issue_id, content) VALUES ($1, $2)
+         ON CONFLICT (issue_id) DO UPDATE SET content = $2, updated_at = now()`,
+        [issueId, content],
+      );
+      return reply.send({ ok: true });
+    },
+  );
+
+  // DELETE /api/sources/issues/:issueId/plan — remove the short plan
+  app.delete<{ Params: { issueId: string } }>(
+    '/issues/:issueId/plan',
+    { schema: { tags } },
+    async (req, reply) => {
+      await db.query('DELETE FROM issue_plans WHERE issue_id = $1', [
+        parseInt(req.params.issueId, 10),
+      ]);
+      return reply.status(204).send();
+    },
+  );
+
+  // GET /api/sources/issues/plans — batch get all plans (returns map of issueId → content)
+  app.get('/issues/plans', { schema: { tags } }, async (_req, reply) => {
+    const { rows } = await db.query<{ issue_id: number; content: string }>(
+      'SELECT issue_id, content FROM issue_plans',
+    );
+    const plans: Record<number, string> = {};
+    for (const row of rows) plans[row.issue_id] = row.content;
+    return reply.send(plans);
+  });
 
   // GET /api/sources/issues — all open issues across active sources
   app.get<{ Querystring: { status?: string; limit?: string } }>(
@@ -848,14 +918,17 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
       const { score: issueScore } = scoreIssue(fields.labels ?? [], fields.summary);
       const sp = jiraStoryPoints(fields) || estimateStoryPoints(body, fields.summary);
 
+      const jCreatedAt = (fields.created as string | null) ?? null;
+
       await db.query(
-        `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, story_points, raw, fetched_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, $8, $9, $10, now())
+        `INSERT INTO issues (source_id, external_id, title, url, body, labels, status, priority, score, story_points, raw, fetched_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, $8, $9, $10, now(), $11)
          ON CONFLICT (source_id, external_id) DO UPDATE SET
            title = EXCLUDED.title, body = EXCLUDED.body, labels = EXCLUDED.labels,
            status = 'open', priority = EXCLUDED.priority,
            score = EXCLUDED.score, story_points = EXCLUDED.story_points,
-           raw = EXCLUDED.raw, fetched_at = now()`,
+           raw = EXCLUDED.raw, fetched_at = now(),
+           created_at = COALESCE($11, issues.created_at)`,
         [
           source.id,
           key,
@@ -867,6 +940,7 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
           issueScore,
           sp,
           JSON.stringify(fields),
+          jCreatedAt,
         ],
       );
       upserted++;
