@@ -125,7 +125,9 @@ function PlanCell({ content }: { content: string | undefined }) {
     <Popover
       headerContent="Short plan"
       bodyContent={
-        <div style={{ maxWidth: '440px', maxHeight: '320px', overflow: 'auto', fontSize: '0.85rem' }}>
+        <div
+          style={{ maxWidth: '440px', maxHeight: '320px', overflow: 'auto', fontSize: '0.85rem' }}
+        >
           <Markdown>{content}</Markdown>
         </div>
       }
@@ -206,12 +208,7 @@ function PlanEditorModal({
   }
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      aria-label="Edit short plan"
-      variant="medium"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} aria-label="Edit short plan" variant="medium">
       <ModalHeader
         title={initialContent ? 'Edit short plan' : 'Add short plan'}
         description={issueTitle}
@@ -1072,7 +1069,6 @@ function AllIssuesSection({
   const COL_OPENED = 2;
   const COL_PRIORITY = 4;
   const COL_SP = 5;
-  const COL_PLAN = 6;
   const PRIORITY_ORDER: Record<string, number> = { critical: 0, major: 1, minor: 2, trivial: 3 };
 
   React.useEffect(() => {
@@ -1087,7 +1083,9 @@ function AllIssuesSection({
       list = [...list].sort((a, b) => {
         let cmp = 0;
         if (sortCol === COL_OPENED)
-          cmp = new Date(a.created_at ?? a.fetched_at).getTime() - new Date(b.created_at ?? b.fetched_at).getTime();
+          cmp =
+            new Date(a.created_at ?? a.fetched_at).getTime() -
+            new Date(b.created_at ?? b.fetched_at).getTime();
         if (sortCol === COL_PRIORITY)
           cmp = (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
         if (sortCol === COL_SP) cmp = (a.story_points || 0) - (b.story_points || 0);

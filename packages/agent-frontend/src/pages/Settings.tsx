@@ -37,7 +37,6 @@ import {
   ModalFooter,
   ModalHeader,
   PageSection,
-  Popover,
   Select,
   SelectList,
   SelectOption,
@@ -966,7 +965,6 @@ function AIProviders({
   );
 }
 
-
 // ── Main Settings page ─────────────────────────────────────────────────────
 
 // ── Autorun widget ─────────────────────────────────────────────────────────
@@ -1096,7 +1094,14 @@ function AutorunWidget({
             {/* Days of week */}
             {enabled && (
               <FlexItem>
-                <span style={{ fontWeight: 500, fontSize: '0.9rem', marginBottom: '4px', display: 'block' }}>
+                <span
+                  style={{
+                    fontWeight: 500,
+                    fontSize: '0.9rem',
+                    marginBottom: '4px',
+                    display: 'block',
+                  }}
+                >
                   Active days:
                 </span>
                 <Flex gap={{ default: 'gapSm' }}>
@@ -1162,10 +1167,14 @@ export default function Settings() {
   const [pendingProviders, setPendingProviders] = useState<ProviderForm[]>([]);
   // Increment to force AIProviders to re-fetch after Save/Cancel
   const [reloadKey, setReloadKey] = useState(0);
+  // Track if initial data load has completed
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const { addAlert } = useAlerts();
 
   useEffect(() => {
+    if (isLoaded) return;
+
     getSettings()
       .then(s => {
         setSaved(s);
@@ -1180,8 +1189,11 @@ export default function Settings() {
         setPendingActiveId(id);
         setSavedActiveId(id);
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {})
+      .finally(() => {
+        setIsLoaded(true);
+      });
+  }, [isLoaded]);
 
   const providerDirty = pendingActiveId !== savedActiveId || pendingProviders.length > 0;
   const settingsDirty = JSON.stringify(settings) !== JSON.stringify(saved);
@@ -1394,7 +1406,6 @@ export default function Settings() {
           </FlexItem>
         </Flex>
       </PageSection>
-
     </>
   );
 }

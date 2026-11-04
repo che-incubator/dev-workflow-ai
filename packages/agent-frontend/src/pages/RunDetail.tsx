@@ -135,8 +135,9 @@ export default function RunDetail({ threadId: propThreadId, onBack }: Props) {
   }, [liveEvents]);
 
   const getPhaseIcon = (phase: string) => {
-    if (donePhases.has(phase)) return '✅';
+    if (donePhases.has(phase) && run?.status !== 'failed') return '✅';
     if (activePhase === phase) return '⏳';
+    if (donePhases.has(phase) && run?.status === 'failed') return '❌';
     return '○';
   };
 
