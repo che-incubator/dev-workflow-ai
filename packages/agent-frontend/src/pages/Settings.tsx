@@ -10,7 +10,8 @@
  *   Red Hat, Inc. - initial API and implementation
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -1155,6 +1156,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export default function Settings() {
+  const navigate = useNavigate();
   const [saved, setSaved] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [priorityOpen, setPriorityOpen] = useState(false);
@@ -1169,6 +1171,9 @@ export default function Settings() {
   const [reloadKey, setReloadKey] = useState(0);
   // Track if initial data load has completed
   const [isLoaded, setIsLoaded] = useState(false);
+  // Unsaved changes confirmation modal
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const pendingNavRef = useRef<string | null>(null);
 
   const { addAlert } = useAlerts();
 
@@ -1233,6 +1238,73 @@ export default function Settings() {
     setPendingActiveId(savedActiveId);
     setPendingProviders([]);
   };
+
+  const handleConfirmDiscard = () => {
+    setShowConfirmModal(false);
+    handleCancel();
+    if (pendingNavRef.current) {
+      navigate(pendingNavRef.current);
+      pendingNavRef.current = null;
+    }
+  };
+
+  const handleConfirmSaveAndLeave = async () => {
+    setShowConfirmModal(false);
+    try {
+      await saveSettings(settings);
+      setSaved(settings);
+      if (pendingActiveId !== savedActiveId && pendingActiveId) {
+        await upsertProvider({ provider_id: pendingActiveId, is_active: true });
+        setSavedActiveId(pendingActiveId);
+      }
+      for (const p of pendingProviders) {
+        await upsertProvider({
+          provider_id: p.provider_id,
+          label: p.label,
+          api_key: p.api_key,
+          model: p.model,
+          base_url: p.base_url,
+          is_active: false,
+        });
+      }
+      if (pendingProviders.length > 0) setPendingProviders([]);
+      setReloadKey(k => k + 1);
+      if (pendingNavRef.current) {
+        navigate(pendingNavRef.current);
+        pendingNavRef.current = null;
+      }
+    } catch (e) {
+      addAlert('danger', e instanceof Error ? e.message : 'Failed to save settings');
+    }
+  };
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    const handleLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('a[href]') as HTMLAnchorElement;
+      if (link && isDirty && !link.href.includes('#')) {
+        e.preventDefault();
+        pendingNavRef.current = link.pathname + link.search + link.hash;
+        setShowConfirmModal(true);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('click', handleLinkClick);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('click', handleLinkClick);
+    };
+  }, [isDirty]);
 
   return (
     <>
@@ -1406,6 +1478,40 @@ export default function Settings() {
           </FlexItem>
         </Flex>
       </PageSection>
+
+      {/* ── Unsaved Changes Confirmation Modal ── */}
+      <Modal
+        isOpen={showConfirmModal}
+        title="Unsaved Changes"
+        onClose={() => {
+          setShowConfirmModal(false);
+          pendingNavRef.current = null;
+        }}
+        variant="small"
+        actions={[
+          <Button key="save" variant="primary" onClick={handleConfirmSaveAndLeave}>
+            Save and Leave
+          </Button>,
+          <Button key="discard" variant="danger" onClick={handleConfirmDiscard}>
+            Discard Changes
+          </Button>,
+          <Button
+            key="cancel"
+            variant="link"
+            onClick={() => {
+              setShowConfirmModal(false);
+              pendingNavRef.current = null;
+            }}
+          >
+            Keep Editing
+          </Button>,
+        ]}
+      >
+        <ModalBody>
+          You have unsaved changes in Agent Defaults or AI Provider settings. Do you want to save
+          them before leaving?
+        </ModalBody>
+      </Modal>
     </>
   );
 }
