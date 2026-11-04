@@ -90,3 +90,24 @@ This project uses `stylelint-config-clean-order`. Follow these group conventions
 - **No empty lines within a group**
 
 ---
+
+## 5. Project Specification Updates
+
+When implementing new features or API changes:
+
+1. **After code changes are committed**, update `openspec/project.md` to reflect the new feature:
+   - Add feature to the "Core Features" section if it's a major capability
+   - Update API Endpoints section if new routes are added
+   - Update Database Schema section if new tables or fields are introduced
+   - Update Architecture section if new modules or components are added
+   - Add new features to "Features Under Development" section if they're planned/in-progress
+
+2. **Specification is the source of truth** for feature documentation, so keep it current as the codebase evolves:
+   - New database table → add table name and purpose to schema section
+   - New API endpoint → add endpoint path, method, and description
+   - New backend node → add to Architecture → Backend section
+   - New frontend page → add to Architecture → Frontend section
+
+3. **Before closing a work item**, verify that `openspec/project.md` accurately reflects the completed feature. Out-of-date specs create confusion for future contributors.
+
+---
