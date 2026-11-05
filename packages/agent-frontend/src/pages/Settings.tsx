@@ -1174,7 +1174,7 @@ export default function Settings() {
   const [isLoaded, setIsLoaded] = useState(false);
   // Unsaved changes confirmation modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const pendingNavRef = useRef<string | null>(null);
+  const [pendingNavPath, setPendingNavPath] = useState<string | null>(null);
 
   const { addAlert } = useAlerts();
 
@@ -1243,10 +1243,9 @@ export default function Settings() {
   const handleConfirmDiscard = () => {
     setShowConfirmModal(false);
     handleCancel();
-    if (pendingNavRef.current) {
-      lastLocationRef.current = pendingNavRef.current;
-      navigate(pendingNavRef.current);
-      pendingNavRef.current = null;
+    if (pendingNavPath) {
+      navigate(pendingNavPath);
+      setPendingNavPath(null);
     }
   };
 
@@ -1271,10 +1270,9 @@ export default function Settings() {
       }
       if (pendingProviders.length > 0) setPendingProviders([]);
       setReloadKey(k => k + 1);
-      if (pendingNavRef.current) {
-        lastLocationRef.current = pendingNavRef.current;
-        navigate(pendingNavRef.current);
-        pendingNavRef.current = null;
+      if (pendingNavPath) {
+        navigate(pendingNavPath);
+        setPendingNavPath(null);
       }
     } catch (e) {
       addAlert('danger', e instanceof Error ? e.message : 'Failed to save settings');
@@ -1297,24 +1295,33 @@ export default function Settings() {
     };
   }, [isDirty]);
 
-  // Monitor location changes to show unsaved changes modal
-  const lastLocationRef = useRef(location.pathname);
+  // Detect location changes and block if dirty
+  const prevLocationRef = useRef(location.pathname);
 
   useEffect(() => {
     const currentPath = location.pathname;
-    const lastPath = lastLocationRef.current;
+    const prevPath = prevLocationRef.current;
 
-    if (currentPath !== lastPath && isDirty && !showConfirmModal) {
-      // Location changed and we have unsaved changes
-      pendingNavRef.current = currentPath;
-      setShowConfirmModal(true);
-      // Navigate back to prevent the actual navigation
-      navigate(lastPath, { replace: true });
-    } else if (!isDirty) {
-      // Update location ref when clean
-      lastLocationRef.current = currentPath;
+    // Only check on actual location changes (not initial render)
+    if (currentPath !== prevPath) {
+      if (isDirty) {
+        // Unsaved changes exist - show modal and revert navigation
+        setPendingNavPath(currentPath);
+        setShowConfirmModal(true);
+        // Force router back to settings
+        navigate(prevPath, { replace: true });
+      } else {
+        // No unsaved changes - allow navigation
+        prevLocationRef.current = currentPath;
+      }
     }
-  }, [location.pathname, isDirty, showConfirmModal, navigate]);
+  }, [location.pathname, isDirty, navigate]);
+
+  // When modal is closed without action, clear pending nav
+  const handleModalClose = () => {
+    setShowConfirmModal(false);
+    setPendingNavPath(null);
+  };
 
   return (
     <>
@@ -1493,10 +1500,7 @@ export default function Settings() {
       <Modal
         isOpen={showConfirmModal}
         title="Unsaved Changes"
-        onClose={() => {
-          setShowConfirmModal(false);
-          pendingNavRef.current = null;
-        }}
+        onClose={handleModalClose}
         variant="small"
         actions={[
           <Button key="save" variant="primary" onClick={handleConfirmSaveAndLeave}>
@@ -1505,14 +1509,7 @@ export default function Settings() {
           <Button key="discard" variant="danger" onClick={handleConfirmDiscard}>
             Discard Changes
           </Button>,
-          <Button
-            key="cancel"
-            variant="link"
-            onClick={() => {
-              setShowConfirmModal(false);
-              pendingNavRef.current = null;
-            }}
-          >
+          <Button key="cancel" variant="link" onClick={handleModalClose}>
             Keep Editing
           </Button>,
         ]}
