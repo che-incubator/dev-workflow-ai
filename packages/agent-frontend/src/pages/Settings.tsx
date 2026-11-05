@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -1157,6 +1157,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 export default function Settings() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [saved, setSaved] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [priorityOpen, setPriorityOpen] = useState(false);
@@ -1243,6 +1244,7 @@ export default function Settings() {
     setShowConfirmModal(false);
     handleCancel();
     if (pendingNavRef.current) {
+      lastLocationRef.current = pendingNavRef.current;
       navigate(pendingNavRef.current);
       pendingNavRef.current = null;
     }
@@ -1270,6 +1272,7 @@ export default function Settings() {
       if (pendingProviders.length > 0) setPendingProviders([]);
       setReloadKey(k => k + 1);
       if (pendingNavRef.current) {
+        lastLocationRef.current = pendingNavRef.current;
         navigate(pendingNavRef.current);
         pendingNavRef.current = null;
       }
@@ -1287,24 +1290,31 @@ export default function Settings() {
       }
     };
 
-    const handleLinkClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const link = target.closest('a[href]') as HTMLAnchorElement;
-      if (link && isDirty && !link.href.includes('#')) {
-        e.preventDefault();
-        pendingNavRef.current = link.pathname + link.search + link.hash;
-        setShowConfirmModal(true);
-      }
-    };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('click', handleLinkClick);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('click', handleLinkClick);
     };
   }, [isDirty]);
+
+  // Monitor location changes to show unsaved changes modal
+  const lastLocationRef = useRef(location.pathname);
+
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const lastPath = lastLocationRef.current;
+
+    if (currentPath !== lastPath && isDirty && !showConfirmModal) {
+      // Location changed and we have unsaved changes
+      pendingNavRef.current = currentPath;
+      setShowConfirmModal(true);
+      // Navigate back to prevent the actual navigation
+      navigate(lastPath, { replace: true });
+    } else if (!isDirty) {
+      // Update location ref when clean
+      lastLocationRef.current = currentPath;
+    }
+  }, [location.pathname, isDirty, showConfirmModal, navigate]);
 
   return (
     <>
