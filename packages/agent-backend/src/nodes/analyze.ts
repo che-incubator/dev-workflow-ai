@@ -96,10 +96,9 @@ export async function analyzeNode(state: State): Promise<Partial<State>> {
         ? `SELECT ip.content FROM issue_plans ip JOIN issues i ON ip.issue_id = i.id WHERE i.external_id = $1 LIMIT 1`
         : null;
     if (issueIdQuery) {
-      const { rows: planRows } = await planDb.query<{ content: string }>(
-        issueIdQuery,
-        [state.issueUrl || state.jiraKey],
-      );
+      const { rows: planRows } = await planDb.query<{ content: string }>(issueIdQuery, [
+        state.issueUrl || state.jiraKey,
+      ]);
       if (planRows[0]?.content) {
         issueBody += `\n\n---\n## Implementation Plan\n\n${planRows[0].content}`;
         nodeLog('analyze: loaded short plan from DB');

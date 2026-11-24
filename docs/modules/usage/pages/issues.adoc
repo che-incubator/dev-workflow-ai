@@ -20,9 +20,37 @@ Each source shows:
 
 * *Kind* — `github` or `jira`
 * *Source* — the repository or board URL
-* *Last synced* — when issues were last fetched
+* *Last synced* — when issues were last fetched, and the reason if the last attempt failed
 
 To add a source, paste a GitHub repository URL or Jira board URL into the input field and click *Add*. Sources defined in the knowledge pack (`pg_seed/eclipse-che/shared/sources.md`) are seeded automatically on startup.
+
+=== When a sync fails
+
+A failed sync records the reason on the source and shows it under *Last synced*. `Last synced`
+itself is only updated by a sync that actually imported issues, so a failing source never looks
+up to date.
+
+Expired credentials are the usual cause:
+
+|===
+| Message | Fix
+
+| `GITHUB_TOKEN rejected (401: Bad credentials)`
+| Generate a new token at https://github.com/settings/tokens and update `GITHUB_TOKEN`.
+
+| `JIRA_TOKEN rejected (401)`
+| Regenerate at https://id.atlassian.com/manage-profile/security/api-tokens and confirm
+  `JIRA_EMAIL` matches that Atlassian account.
+
+| `Repository not found (404)`
+| Check the source URL, and that the token can see the repo if it is private.
+|===
+
+IMPORTANT: Jira "assigned to me" sources verify credentials against `/rest/api/3/myself` before
+searching. This matters because Jira Cloud answers issue searches for *anonymous* callers on
+projects with public browse permission. With a bad token the search still returns HTTP 200 and an
+empty list — `assignee = currentUser()` matches nothing when you are anonymous — which is
+otherwise indistinguishable from having no assigned issues.
 
 == All issues
 
@@ -42,6 +70,17 @@ Each issue row displays:
 
 Use the *Batch CVE fix* button to combine multiple security issues into a single branch and pull request.
 
+[[story-points-and-autorun]]
+=== Story points and autorun
+
+The xref:settings.adoc#daily-autorun[daily autorun] only picks up issues that carry story points.
+An unestimated issue has not been sized, so the story-point budget cannot be applied to it and the
+agent would be working blind.
+
+Such issues are *not* hidden: they stay in this table and can be started by hand from the issue
+picker with *Force priority*. When autorun finds nothing to run, the log reports how many open
+issues were skipped for having no estimate.
+
 == Issue picker
 
 The issue picker lets you queue specific issues for the agent to process. Paste a GitHub issue URL or Jira URL, choose the priority mode, and click *Add*.
@@ -49,7 +88,13 @@ The issue picker lets you queue specific issues for the agent to process. Paste 
 .Issue picker — queue issues for the agent
 image::issues__Issue_Picker.png[Issue picker]
 
-Each queued issue can be started individually. The *Mode* column shows whether the priority was set to *auto* (agent decides) or overridden manually.
+Each queued issue can be started individually. The *Mode* column shows whether the priority was set to *auto* (agent decides) or overridden manually. *Force priority* is also how you run an issue that autorun skips for having no story points.
+
+The queue is stored in the browser, but its entries reference rows in the database. When the
+database is recreated — which happens on every restart unless `PGLITE_DATA_DIR` is set — the
+queue is cleared rather than re-imported, so a fresh `yarn prepare:db && yarn start` starts with
+an empty picker. If the backend cannot be reached the queue is kept, so being offline never
+discards it.
 
 .Additional resources
 

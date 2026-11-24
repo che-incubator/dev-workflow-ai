@@ -25,6 +25,8 @@ import {
   EmptyStateVariant,
   Flex,
   FlexItem,
+  HelperText,
+  HelperTextItem,
   Label,
   MenuToggle,
   Modal,
@@ -59,6 +61,7 @@ import {
   getAllIssues,
   getIssuePlans,
   getRuns,
+  subscribeToRuns,
   getSources,
   IssueSource,
   importIssue,
@@ -251,6 +254,41 @@ interface QueueItem {
   forceP: boolean;
 }
 
+const QUEUE_KEY = 'dwa_picker_queue';
+const QUEUE_DB_KEY = 'dwa_picker_queue_db';
+
+/**
+ * The picker queue is browser-local, but its items reference rows in the
+ * backend database. When the database is recreated — which happens on every
+ * restart with an in-memory PGlite, i.e. the default `yarn start` — those rows
+ * are gone and the queue is stale. Stamping it with the backend's
+ * `dbInstanceId` lets us drop it instead of resurrecting dead issues.
+ */
+function readStoredQueue(): QueueItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]') as QueueItem[];
+  } catch {
+    return [];
+  }
+}
+
+function clearStoredQueue(): void {
+  localStorage.removeItem(QUEUE_KEY);
+  localStorage.removeItem(QUEUE_DB_KEY);
+}
+
+/** Returns the backend's current db instance id, or '' if unavailable. */
+async function fetchDbInstanceId(): Promise<string> {
+  try {
+    const res = await fetch('/health');
+    if (!res.ok) return '';
+    const body = (await res.json()) as { dbInstanceId?: string };
+    return body.dbInstanceId ?? '';
+  } catch {
+    return '';
+  }
+}
+
 // ── Issues Sources section ────────────────────────────────────────────────
 
 function IssuesSourcesSection({
@@ -327,15 +365,23 @@ function IssuesSourcesSection({
     try {
       if (isJiraAssignedUrl(src.url)) {
         const result = await syncJiraAssigned(src.id);
-        addAlert('success', `Synced ${result.upserted} assigned Jira issues`);
+        addAlert(
+          result.upserted > 0 ? 'success' : 'warning',
+          result.upserted > 0
+            ? `Synced ${result.upserted} assigned Jira issues`
+            : 'Jira returned no assigned issues matching the filter (To Do / New, unresolved).',
+        );
         onReload();
       } else {
         await syncSource(src.id);
         addAlert('info', 'Sync started — issues will appear shortly');
-        setTimeout(onReload, 4000);
+        // The backend sync is fire-and-forget; reload a few times so a failure
+        // recorded on the source (e.g. a rejected token) becomes visible.
+        [2000, 6000, 12000].forEach(ms => setTimeout(onReload, ms));
       }
     } catch (e) {
       addAlert('danger', e instanceof Error ? e.message : 'Sync failed');
+      onReload();
     } finally {
       setSyncing(null);
     }
@@ -513,6 +559,11 @@ function IssuesSourcesSection({
                   </Td>
                   <Td>
                     {src.last_synced_at ? new Date(src.last_synced_at).toLocaleString() : 'Never'}
+                    {src.last_error && (
+                      <HelperText>
+                        <HelperTextItem variant="error">{src.last_error}</HelperTextItem>
+                      </HelperText>
+                    )}
                   </Td>
                   <Td isActionCell>
                     <Dropdown
@@ -576,13 +627,10 @@ function IssuePickerSection({
   const { addAlert } = useAlerts();
   const [inputUrl, setInputUrl] = useState('');
   const [forceP, setForceP] = useState(false);
-  const [queue, setQueue] = useState<QueueItem[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('dwa_picker_queue') ?? '[]') as QueueItem[];
-    } catch {
-      return [];
-    }
-  });
+  const [queue, setQueue] = useState<QueueItem[]>(() => readStoredQueue());
+  // Hold off persisting until the stored queue has been checked against the
+  // backend, so the restore effect cannot race the save effect.
+  const [queueChecked, setQueueChecked] = useState(false);
   const [starting, setStarting] = useState<string | null>(null);
   const [queueFilter, setQueueFilter] = useState('');
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -594,28 +642,69 @@ function IssuePickerSection({
   } | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('dwa_picker_queue', JSON.stringify(queue));
-  }, [queue]);
+    if (!queueChecked) return;
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  }, [queue, queueChecked]);
 
-  // On mount: re-import all queue items to sync with DB (handles fresh PGlite restarts
-  // where issueId from localStorage refers to a row that no longer exists).
+  // On mount: decide whether the stored queue still belongs to this database.
+  //
+  // Same database  → re-import each item so issueId points at a live row.
+  // New database   → the queued issues no longer exist; start empty rather than
+  //                  re-creating them, so a fresh `yarn prepare:db && yarn start`
+  //                  gives an empty picker.
   useEffect(() => {
-    queue.forEach(item => {
-      importIssue(item.url)
-        .then(issue => {
-          setQueue(prev =>
-            prev.map(i =>
-              i.key === item.key ? { ...i, issueId: issue.id, title: issue.title } : i,
-            ),
+    let cancelled = false;
+
+    void (async () => {
+      const dbId = await fetchDbInstanceId();
+      if (cancelled) return;
+
+      const storedDbId = localStorage.getItem(QUEUE_DB_KEY);
+      const stored = readStoredQueue();
+
+      // An unknown id (health unreachable, or a queue saved before this field
+      // existed) is adopted rather than treated as a mismatch, so an offline
+      // backend never silently discards the user's queue.
+      const isNewDb = dbId !== '' && storedDbId !== null && storedDbId !== dbId;
+
+      if (isNewDb) {
+        clearStoredQueue();
+        setQueue([]);
+        if (stored.length > 0) {
+          addAlert(
+            'info',
+            `Cleared ${stored.length} queued issue(s) — the database was recreated since they were added.`,
           );
-          onIssueImported?.();
-        })
-        .catch(() => {
-          if (item.issueId !== null) {
+        }
+        if (dbId) localStorage.setItem(QUEUE_DB_KEY, dbId);
+        setQueueChecked(true);
+        return;
+      }
+
+      if (dbId) localStorage.setItem(QUEUE_DB_KEY, dbId);
+      setQueueChecked(true);
+
+      stored.forEach(item => {
+        importIssue(item.url)
+          .then(issue => {
+            if (cancelled) return;
+            setQueue(prev =>
+              prev.map(i =>
+                i.key === item.key ? { ...i, issueId: issue.id, title: issue.title } : i,
+              ),
+            );
+            onIssueImported?.();
+          })
+          .catch(() => {
+            if (cancelled || item.issueId === null) return;
             setQueue(prev => prev.map(i => (i.key === item.key ? { ...i, issueId: null } : i)));
-          }
-        });
-    });
+          });
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filteredQueue = useMemo(
@@ -1512,10 +1601,11 @@ export default function Issues() {
     });
   }, []);
 
+  // Run state arrives over the WebSocket. No polling: `subscribeToRuns` calls
+  // back on connect and on every run lifecycle transition the server reports.
   useEffect(() => {
     handleReload();
-    const id = setInterval(loadRuns, 10_000);
-    return () => clearInterval(id);
+    return subscribeToRuns(loadRuns);
   }, []);
 
   const activeIssueUrls = useMemo(

@@ -34,6 +34,8 @@ interface IssueSourceRow {
   project_slug: string;
   active: boolean;
   last_synced_at: string | null;
+  /** Last sync failure message; empty when the last sync succeeded. */
+  last_error: string;
   created_at: string;
 }
 
@@ -631,6 +633,25 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
         sourceId = src.id;
       }
 
+      // Verify the credentials before searching.
+      //
+      // Jira Cloud serves /rest/api/3/search/jql to ANONYMOUS callers on
+      // projects with public browse permission (CRW is one). With invalid
+      // credentials the search returns HTTP 200 and an empty list, because
+      // `assignee = currentUser()` matches nothing for an anonymous caller —
+      // indistinguishable from "nothing is assigned to you" unless we check.
+      const whoami = await fetch(`${jiraBase}/rest/api/3/myself`, {
+        headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+      });
+      if (!whoami.ok) {
+        const detail =
+          whoami.status === 401
+            ? 'JIRA_TOKEN rejected (401). Regenerate it at https://id.atlassian.com/manage-profile/security/api-tokens and check JIRA_EMAIL matches that Atlassian account.'
+            : `Jira auth check failed with HTTP ${whoami.status}.`;
+        await recordSyncError(sourceId, detail);
+        return reply.status(401).send({ error: detail });
+      }
+
       // Fetch assigned-to-me open issues (To Do / New only — skip In Progress and Done)
       // Uses Jira REST API v3 /search/jql (POST) with cursor-based pagination (nextPageToken).
       // Note: startAt is NOT valid for this endpoint; use nextPageToken instead.
@@ -669,6 +690,8 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
 
         if (!res.ok) {
           const text = await res.text();
+          const detail = `Jira search failed with HTTP ${res.status}: ${text.slice(0, 300)}`;
+          await recordSyncError(sourceId, detail);
           return reply
             .status(res.status)
             .send({ error: `Jira API error: ${res.status}`, detail: text.slice(0, 300) });
@@ -739,7 +762,10 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
         nextPageToken = data.nextPageToken;
       }
 
-      await db.query('UPDATE issue_sources SET last_synced_at = now() WHERE id = $1', [sourceId]);
+      await db.query(
+        "UPDATE issue_sources SET last_synced_at = now(), last_error = '' WHERE id = $1",
+        [sourceId],
+      );
 
       console.log(`[jira-assigned] Synced ${upserted} issues into source ${sourceId}`);
       return reply.send({ sourceId, upserted });
@@ -835,6 +861,32 @@ export const sourcesRoutes: FastifyPluginAsync = async app => {
 
 // ── Background sync for Jira "assigned to me" sources ─────────────────────
 
+/**
+ * Persist a sync failure so the UI can show why a source has no issues.
+ *
+ * Deliberately leaves `last_synced_at` alone: a failed attempt must not read as
+ * a successful sync. The row keeps the timestamp of the last sync that actually
+ * imported something, with the error shown beside it.
+ */
+async function recordSyncError(sourceId: number, message: string): Promise<void> {
+  await db.query('UPDATE issue_sources SET last_error = $2 WHERE id = $1', [sourceId, message]);
+}
+
+/** Turn a failed sync into something the operator can act on. */
+function describeSyncError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/GitHub API 401/.test(msg)) {
+    return 'GITHUB_TOKEN rejected (401: Bad credentials). Generate a new token at https://github.com/settings/tokens and update GITHUB_TOKEN.';
+  }
+  if (/GitHub API 403/.test(msg)) {
+    return 'GitHub API refused the request (403) — rate limit or insufficient token scope. A token with `public_repo` scope raises the limit.';
+  }
+  if (/GitHub API 404/.test(msg)) {
+    return 'Repository not found (404). Check the source URL, and that the token can see the repo if it is private.';
+  }
+  return msg.slice(0, 500);
+}
+
 async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
   const jiraToken = process.env.JIRA_TOKEN ?? process.env.JIRA_API_TOKEN;
   const jiraEmail = process.env.JIRA_EMAIL;
@@ -846,6 +898,27 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
   }
 
   const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+
+  // Verify the credentials before searching.
+  //
+  // Jira Cloud serves /rest/api/3/search/jql to ANONYMOUS callers on projects
+  // with public browse permission (CRW is one). With invalid credentials the
+  // search therefore returns HTTP 200 and an empty list, because
+  // `assignee = currentUser()` matches nothing for an anonymous caller —
+  // indistinguishable from "you have no assigned issues" unless we check first.
+  const whoami = await fetch(`${jiraBase}/rest/api/3/myself`, {
+    headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+  });
+  if (!whoami.ok) {
+    const detail =
+      whoami.status === 401
+        ? 'JIRA_TOKEN rejected (401). Regenerate it at https://id.atlassian.com/manage-profile/security/api-tokens and check JIRA_EMAIL matches the Atlassian account.'
+        : `Jira auth check failed with HTTP ${whoami.status}.`;
+    console.error(`[jira-assigned] ${detail}`);
+    await recordSyncError(source.id, detail);
+    return;
+  }
+
   // Only "To Do" / "New" issues — skip In Progress and Done.
   // Uses cursor-based pagination (nextPageToken), not startAt.
   const jql =
@@ -882,7 +955,9 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
     });
 
     if (!res.ok) {
-      console.error(`[jira-assigned] Jira API error: ${res.status}`);
+      const detail = `Jira search failed with HTTP ${res.status}.`;
+      console.error(`[jira-assigned] ${detail}`);
+      await recordSyncError(source.id, detail);
       return;
     }
 
@@ -950,7 +1025,9 @@ async function syncJiraAssigned(source: IssueSourceRow): Promise<void> {
     nextPageToken = data.nextPageToken;
   }
 
-  await db.query('UPDATE issue_sources SET last_synced_at = now() WHERE id = $1', [source.id]);
+  await db.query("UPDATE issue_sources SET last_synced_at = now(), last_error = '' WHERE id = $1", [
+    source.id,
+  ]);
   console.log(`[jira-assigned] Synced ${upserted} issues for source ${source.id}`);
 }
 
@@ -971,9 +1048,18 @@ async function syncSource(source: IssueSourceRow): Promise<void> {
       count = await fetchJiraIssues(source.url, source.id);
     }
 
-    await db.query('UPDATE issue_sources SET last_synced_at = now() WHERE id = $1', [source.id]);
+    await db.query(
+      "UPDATE issue_sources SET last_synced_at = now(), last_error = '' WHERE id = $1",
+      [source.id],
+    );
     console.log(`[sync] ✓ ${source.label}: ${count} issues upserted`);
   } catch (err) {
-    console.error(`[sync] ✗ ${source.label}:`, err instanceof Error ? err.message : err);
+    // Previously console-only, which left the UI showing "Never" with no
+    // explanation when a token expired. Persist it so the operator can see why.
+    const detail = describeSyncError(err);
+    console.error(`[sync] ✗ ${source.label}: ${detail}`);
+    await recordSyncError(source.id, detail).catch(() => {
+      /* DB unavailable — the console line above is all we can do */
+    });
   }
 }

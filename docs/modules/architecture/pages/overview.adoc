@@ -75,6 +75,37 @@ Browser ──> Fastify (port 3000) ──> REST API routes
 
 The Fastify server serves both the REST API and the frontend static files. WebSocket connections stream real-time log updates to the browser.
 
+== Live updates over WebSocket
+
+The browser does not poll for run state. A single `/ws` endpoint carries two kinds of
+subscription:
+
+Per-run channel::
+Subscribe with `{"subscribe": "<threadId>"}` to receive that run's `node_start`,
+`node_complete`, `log`, `run_complete` and `run_failed` events. Used by the runtime log view.
+
+Run-list channel::
+Subscribe with `{"subscribe": "runs"}` to receive a `runs_changed` notification whenever a run
+is created or changes lifecycle state. Views that render a list of runs use this instead of a
+timer.
+
+`runs_changed` carries no run data; a client reloads the slice it cares about when one arrives.
+The notification is deliberately limited to lifecycle transitions (run created, phase start and
+complete, run complete, run failed) rather than every log line, which would otherwise trigger
+dozens of reloads per run.
+
+The client reconnects with exponential backoff and reloads on reconnect, so events missed while
+the socket was down are picked up and a backend restart does not leave a view permanently stale.
+
+== Health and database identity
+
+`GET /health` returns `{ status, ts, dbInstanceId }`.
+
+`dbInstanceId` is a UUID generated once per database and stored in the `settings` table. A
+database that survives a restart keeps the same id; an in-memory PGlite gets a new one on every
+boot. Clients use it to discard browser-local state that points at rows which no longer exist —
+see the issue picker in xref:usage:issues.adoc[].
+
 .Additional resources
 
 * xref:knowledge-packs.adoc[]

@@ -31,6 +31,8 @@ import {
   FlexItem,
   Form,
   FormGroup,
+  HelperText,
+  HelperTextItem,
   Label,
   MenuToggle,
   Modal,
@@ -69,25 +71,26 @@ import {
 const PRIORITIES = ['critical', 'major', 'minor', 'trivial'];
 
 const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
-  vertex: 'claude-sonnet-4-6@default',
-  anthropic: 'claude-sonnet-4-6',
+  vertex: 'claude-haiku-4-5@20251001',
+  anthropic: 'claude-haiku-4-5-20251001',
   openai: 'gpt-4o',
   gemini: 'gemini-3.6-flash',
   ollama: 'qwen2.5-coder:7b',
 };
 
 const PROVIDER_MODELS: Record<string, string[]> = {
+  // Default first, then by capability.
   vertex: [
+    'claude-haiku-4-5@20251001',
     'claude-sonnet-4-6@default',
     'claude-opus-4-6@default',
     'claude-sonnet-4-5@20250929',
-    'claude-haiku-4-5@20251001',
     'claude-opus-4-5@20251101',
   ],
   anthropic: [
+    'claude-haiku-4-5-20251001',
     'claude-sonnet-4-6',
     'claude-opus-4-6',
-    'claude-haiku-4-5-20251001',
     'claude-sonnet-4-5-20250929',
     'claude-opus-4-5-20251101',
   ],
@@ -104,6 +107,31 @@ const PROVIDER_MODELS: Record<string, string[]> = {
     'deepseek-coder-v2',
   ],
 };
+
+/**
+ * Short capability hint shown under each model in the picker.
+ *
+ * Keyed by the bare model family so both the Anthropic API id
+ * (`claude-haiku-4-5-20251001`) and the Vertex id (`claude-haiku-4-5@20251001`)
+ * resolve to the same hint without duplicating entries.
+ */
+const MODEL_HINTS: Record<string, string> = {
+  'claude-haiku-4-5': 'Fastest for quick answers (default)',
+  'claude-opus-4-5': 'Previous generation, highest capability',
+  'claude-opus-4-6': 'Most capable for complex implementation',
+  'claude-sonnet-4-5': 'Previous generation, balanced',
+  'claude-sonnet-4-6': 'Balanced speed and capability',
+  'gemini-3.6-flash': 'Fastest for quick answers',
+  'gemini-3.6-pro': 'Balanced speed and capability',
+  'gpt-4o-mini': 'Fastest for quick answers',
+};
+
+/** Strip the Vertex `@version` / Anthropic `-YYYYMMDD` suffix to get the model family. */
+export function modelHint(modelId: string): string | undefined {
+  if (MODEL_HINTS[modelId]) return MODEL_HINTS[modelId];
+  const family = modelId.split('@')[0].replace(/-\d{8}$/, '');
+  return MODEL_HINTS[family];
+}
 
 const PROVIDER_META: Record<
   string,
@@ -134,6 +162,23 @@ const PROVIDER_META: Record<
 };
 
 const KNOWN_PROVIDERS = ['vertex', 'anthropic', 'openai', 'gemini', 'ollama'];
+
+/**
+ * Display names for provider ids. Must match the labels seeded by
+ * `seedDefaultProviders()` in the backend, so a provider reads the same in the
+ * Add dialog as it does in the provider list.
+ */
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic (Claude)',
+  gemini: 'Gemini',
+  ollama: 'Ollama',
+  openai: 'OpenAI',
+  vertex: 'Vertex AI (Claude)',
+};
+
+function providerLabel(id: string): string {
+  return PROVIDER_LABELS[id] ?? id;
+}
 
 function providerMeta(id: string) {
   return PROVIDER_META[id] ?? { key: 'API key', keyPlaceholder: 'Paste key…' };
@@ -279,7 +324,7 @@ function AIProviders({
     // Stage the new provider — it will be persisted when the parent saves
     onPendingProvidersChange([
       ...pendingProviders,
-      { ...addForm, label: addForm.label || addForm.provider_id },
+      { ...addForm, label: addForm.label || providerLabel(addForm.provider_id) },
     ]);
     setShowAdd(false);
     setAddForm({ ...EMPTY_ADD });
@@ -309,6 +354,8 @@ function AIProviders({
     ...pendingProviders.map(p => p.provider_id),
   ]);
   const availableToAdd = KNOWN_PROVIDERS.filter(id => !existingIds.has(id));
+  // Shown in the Add dialog so it is clear why a provider is missing from the list.
+  const alreadyConfigured = KNOWN_PROVIDERS.filter(id => existingIds.has(id));
   const addMeta = providerMeta(addForm.provider_id);
   const editMeta = editTarget ? providerMeta(editTarget.provider_id) : null;
 
@@ -759,10 +806,13 @@ function AIProviders({
                 selected={addForm.provider_id}
                 onSelect={(_e, val) => {
                   const id = String(val);
+                  // Reset the model to the new provider's default. Carrying over
+                  // f.model would leave e.g. "gpt-4o" selected after switching
+                  // from OpenAI to Vertex.
                   setAddForm(f => ({
                     ...f,
                     provider_id: id,
-                    model: f.model || PROVIDER_DEFAULT_MODEL[id] || '',
+                    model: PROVIDER_DEFAULT_MODEL[id] ?? '',
                   }));
                   setAddProviderOpen(false);
                 }}
@@ -774,18 +824,26 @@ function AIProviders({
                     isExpanded={addProviderOpen}
                     style={{ minWidth: '160px' }}
                   >
-                    {addForm.provider_id || 'Select…'}
+                    {addForm.provider_id ? providerLabel(addForm.provider_id) : 'Select…'}
                   </MenuToggle>
                 )}
               >
                 <SelectList>
                   {availableToAdd.map(id => (
                     <SelectOption key={id} value={id}>
-                      {id}
+                      {providerLabel(id)}
                     </SelectOption>
                   ))}
                 </SelectList>
               </Select>
+              {alreadyConfigured.length > 0 && (
+                <HelperText>
+                  <HelperTextItem>
+                    Already configured: {alreadyConfigured.map(providerLabel).join(', ')}. Use Edit
+                    on the provider list to change one.
+                  </HelperTextItem>
+                </HelperText>
+              )}
             </FormGroup>
             {addForm.provider_id && !addMeta.noKey && (
               <FormGroup label={addMeta.key} isRequired fieldId="add-prov-key">
@@ -829,7 +887,7 @@ function AIProviders({
                         >
                           <SelectList>
                             {knownModels.map(m => (
-                              <SelectOption key={m} value={m}>
+                              <SelectOption key={m} value={m} description={modelHint(m)}>
                                 {m}
                               </SelectOption>
                             ))}

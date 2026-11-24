@@ -25,9 +25,10 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { emitTokenLog } from './tokenLog.js';
+import { DEFAULT_MODELS } from './defaults.js';
 
 const _THINKING = process.env.CLAUDE_THINKING !== 'false'; // reserved for direct API path
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_MODEL = DEFAULT_MODELS.anthropic;
 const DEFAULT_MAX_TOKENS = 16000;
 const THINKING_BUDGET = 10000;
 
@@ -246,7 +247,7 @@ export async function getAnthropicClient(): Promise<AnthropicClient | null> {
         console.warn('[anthropic] GOOGLE_APPLICATION_CREDENTIALS_JSON is not valid JSON');
       }
     }
-    const model = process.env.VERTEX_CLAUDE_MODEL ?? 'claude-sonnet-4-6@default';
+    const model = process.env.VERTEX_CLAUDE_MODEL ?? DEFAULT_MODELS.vertex;
     console.log(`[anthropic] Vertex AI (${process.env.ANTHROPIC_VERTEX_PROJECT_ID}, ${model})`);
     const client = new AnthropicClient({
       vertexProjectId: process.env.ANTHROPIC_VERTEX_PROJECT_ID,

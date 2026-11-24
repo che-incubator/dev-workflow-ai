@@ -73,6 +73,8 @@ export interface IssueSource {
   project_slug: string;
   active: boolean;
   last_synced_at: string | null;
+  /** Last sync failure message; empty when the last sync succeeded. */
+  last_error: string;
   created_at: string;
 }
 
@@ -238,6 +240,60 @@ export function subscribeToRun(threadId: string, onEvent: (e: WsEvent) => void):
   };
 
   return () => ws.close();
+}
+
+/** Reserved channel carrying `runs_changed` notifications. */
+const RUNS_CHANNEL = 'runs';
+
+/**
+ * Subscribe to run-list changes.
+ *
+ * Replaces timer-based polling of `GET /api/runs`: the server pushes a
+ * `runs_changed` notification on every run lifecycle transition and the caller
+ * reloads once in response. Reconnects with exponential backoff, so a restarted
+ * backend does not leave the view permanently stale.
+ */
+export function subscribeToRuns(onChange: () => void): () => void {
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  let ws: WebSocket | null = null;
+  let retry = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let closed = false;
+
+  const connect = (): void => {
+    if (closed) return;
+    ws = new WebSocket(`${proto}://${window.location.host}/ws`);
+
+    ws.onopen = () => {
+      retry = 0;
+      ws?.send(JSON.stringify({ subscribe: RUNS_CHANNEL }));
+      // Resync after a gap — events during a disconnect were missed.
+      onChange();
+    };
+
+    ws.onmessage = msg => {
+      try {
+        const e = JSON.parse(msg.data) as { type?: string };
+        if (e.type === 'runs_changed') onChange();
+      } catch {
+        /* ignore malformed frames */
+      }
+    };
+
+    ws.onclose = () => {
+      if (closed) return;
+      const delay = Math.min(30_000, 1_000 * 2 ** retry++);
+      reconnectTimer = setTimeout(connect, delay);
+    };
+  };
+
+  connect();
+
+  return () => {
+    closed = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    ws?.close();
+  };
 }
 
 // ── LLM Providers ─────────────────────────────────────────────────────────

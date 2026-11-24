@@ -27,6 +27,7 @@ import { providersRoutes } from './routes/providers.js';
 import { settingsRoutes } from './routes/settings.js';
 import { authRoutes } from './routes/auth.js';
 import { agentStream } from './ws/agentStream.js';
+import { ensureDbInstanceId } from '../db/migrations.js';
 
 export async function buildServer() {
   const app = Fastify({
@@ -95,16 +96,29 @@ export async function buildServer() {
   // WebSocket
   app.get('/ws', { websocket: true }, agentStream);
 
-  // Health check
-  app.get('/health', async (_req, reply) =>
-    reply.send({ status: 'ok', ts: new Date().toISOString() }),
-  );
+  // Health check. `dbInstanceId` changes whenever the database is recreated —
+  // clients use it to drop local state pointing at rows that no longer exist.
+  app.get('/health', async (_req, reply) => {
+    let dbInstanceId = '';
+    try {
+      dbInstanceId = await ensureDbInstanceId();
+    } catch {
+      // DB not reachable — still report liveness, just without the id.
+    }
+    return reply.send({ status: 'ok', ts: new Date().toISOString(), dbInstanceId });
+  });
 
   // SPA fallback — only for browser navigation, not API/swagger/ws paths
   if (existsSync(distDir)) {
     app.setNotFoundHandler((req, reply) => {
       const url = req.url;
-      if (url.startsWith('/api/') || url.startsWith('/docs/') || url.startsWith('/swagger') || url.startsWith('/ws') || url === '/health') {
+      if (
+        url.startsWith('/api/') ||
+        url.startsWith('/docs/') ||
+        url.startsWith('/swagger') ||
+        url.startsWith('/ws') ||
+        url === '/health'
+      ) {
         return reply.code(404).send({ error: 'Not Found' });
       }
       reply.sendFile('index.html');

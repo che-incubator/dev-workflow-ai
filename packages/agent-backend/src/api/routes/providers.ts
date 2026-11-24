@@ -14,6 +14,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { HumanMessage } from '@langchain/core/messages';
 import { db } from '../../db/client.js';
 import { buildLLMFromDB, buildLLMFromProvider, buildEnvLLM } from '../../llm/client.js';
+import { DEFAULT_MODELS } from '../../llm/defaults.js';
 import { providerTestSchema } from '../../constants/schemas.js';
 
 interface ProviderRow {
@@ -32,13 +33,24 @@ function mask(row: ProviderRow): ProviderRow {
   return { ...row, api_key: row.api_key ? '***' : '' };
 }
 
+/**
+ * Model seeded onto a freshly created provider row, and shown as the default in
+ * Settings → AI Providers. Haiku 4.5 is the fastest and cheapest option.
+ *
+ * Only applies when the row has no model yet — set VERTEX_CLAUDE_MODEL (Vertex,
+ * `@YYYYMMDD`) or pick another model in the UI to override. Note this is the
+ * model the agent nodes run on, not just a display value.
+ */
+const DEFAULT_VERTEX_MODEL = DEFAULT_MODELS.vertex;
+const DEFAULT_ANTHROPIC_MODEL = DEFAULT_MODELS.anthropic;
+
 export async function seedDefaultProviders(): Promise<void> {
   const { rows: existing } = await db.query('SELECT COUNT(*) as n FROM llm_providers');
   const hasRows = parseInt((existing[0] as { n: string }).n, 10) > 0;
 
   const vertexProjectIdNow = process.env.ANTHROPIC_VERTEX_PROJECT_ID;
   const vertexRegionNow = process.env.CLOUD_ML_REGION ?? 'global';
-  const vertexModelNow = process.env.VERTEX_CLAUDE_MODEL ?? 'claude-sonnet-4-6@default';
+  const vertexModelNow = process.env.VERTEX_CLAUDE_MODEL ?? DEFAULT_VERTEX_MODEL;
 
   // Keep vertex project ID up to date from env; preserve model/region set by the user
   if (hasRows && vertexProjectIdNow) {
@@ -58,10 +70,7 @@ export async function seedDefaultProviders(): Promise<void> {
       'SELECT provider_id, api_key FROM llm_providers WHERE is_active = true LIMIT 1',
     );
     const active = activeRows[0];
-    const needsSwitch =
-      active &&
-      active.provider_id !== 'vertex' &&
-      !active.api_key;
+    const needsSwitch = active && active.provider_id !== 'vertex' && !active.api_key;
     if (needsSwitch || !active) {
       await db.query('UPDATE llm_providers SET is_active = false, updated_at = now()');
       await db.query(
@@ -94,7 +103,7 @@ export async function seedDefaultProviders(): Promise<void> {
 
   const vertexProjectId = process.env.ANTHROPIC_VERTEX_PROJECT_ID;
   const vertexRegion = process.env.CLOUD_ML_REGION ?? 'global';
-  const vertexModel = process.env.VERTEX_CLAUDE_MODEL ?? 'claude-sonnet-4-6@default';
+  const vertexModel = process.env.VERTEX_CLAUDE_MODEL ?? DEFAULT_VERTEX_MODEL;
 
   const anthropicKey = process.env.ANTHROPIC_API_KEY ?? '';
   const geminiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) ?? '';
@@ -137,7 +146,7 @@ export async function seedDefaultProviders(): Promise<void> {
             label: 'Anthropic (Claude)',
             api_key: anthropicKey,
             base_url: '',
-            model: 'claude-sonnet-4-6',
+            model: DEFAULT_ANTHROPIC_MODEL,
             is_active: defaultActive === 'anthropic',
           },
         ]
@@ -149,7 +158,7 @@ export async function seedDefaultProviders(): Promise<void> {
             label: 'OpenAI',
             api_key: openaiKey,
             base_url: '',
-            model: 'gpt-4o',
+            model: DEFAULT_MODELS.openai,
             is_active: false,
           },
         ]
@@ -161,7 +170,7 @@ export async function seedDefaultProviders(): Promise<void> {
             label: 'Gemini',
             api_key: geminiKey,
             base_url: '',
-            model: process.env.GEMINI_MODEL ?? 'gemini-3.6-flash',
+            model: process.env.GEMINI_MODEL ?? DEFAULT_MODELS.gemini,
             is_active: defaultActive === 'gemini',
           },
         ]

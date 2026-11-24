@@ -29,6 +29,7 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { allTools } from '../tools/index.js';
+import { DEFAULT_MODELS, FAST_MODELS } from './defaults.js';
 import {
   buildVertexAnthropicLLM,
   isVertexConfigured,
@@ -76,7 +77,7 @@ export function buildLLMFromProvider(cfg: ProviderConfig): BaseChatModel {
       return new VertexAnthropicLLM({
         projectId,
         region,
-        model: cfg.model || process.env.VERTEX_CLAUDE_MODEL || 'claude-sonnet-4-5@20250929',
+        model: cfg.model || process.env.VERTEX_CLAUDE_MODEL || DEFAULT_MODELS.vertex,
         maxTokens: 8192,
         credentials,
       });
@@ -87,7 +88,7 @@ export function buildLLMFromProvider(cfg: ProviderConfig): BaseChatModel {
         throw new Error('Anthropic API key not set — configure it in Settings → AI Providers');
       if (THINKING) {
         return new ChatAnthropic({
-          model: cfg.model || 'claude-sonnet-4-6',
+          model: cfg.model || DEFAULT_MODELS.anthropic,
           maxTokens: 16000,
           apiKey: cfg.api_key,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,7 +96,7 @@ export function buildLLMFromProvider(cfg: ProviderConfig): BaseChatModel {
         });
       }
       return new ChatAnthropic({
-        model: cfg.model || 'claude-sonnet-4-6',
+        model: cfg.model || DEFAULT_MODELS.anthropic,
         maxTokens: 16000,
         apiKey: cfg.api_key,
       });
@@ -107,7 +108,7 @@ export function buildLLMFromProvider(cfg: ProviderConfig): BaseChatModel {
       if (!geminiKey)
         throw new Error('Gemini API key not set — configure it in Settings → AI Providers');
       return new ChatGoogleGenerativeAI({
-        model: cfg.model || 'gemini-3.6-flash',
+        model: cfg.model || DEFAULT_MODELS.gemini,
         apiKey: geminiKey,
         maxOutputTokens: 8192,
         temperature: 0.1,
@@ -118,7 +119,7 @@ export function buildLLMFromProvider(cfg: ProviderConfig): BaseChatModel {
       if (!cfg.api_key)
         throw new Error('OpenAI API key not set — configure it in Settings → AI Providers');
       return new ChatOpenAI({
-        model: cfg.model || 'gpt-4o',
+        model: cfg.model || DEFAULT_MODELS.openai,
         apiKey: cfg.api_key,
         configuration: cfg.base_url ? { baseURL: cfg.base_url } : undefined,
         maxTokens: 8192,
@@ -175,17 +176,17 @@ export function buildEnvLLM(): BaseChatModel {
     );
     if (THINKING) {
       return new ChatAnthropic({
-        model: 'claude-sonnet-4-6',
+        model: DEFAULT_MODELS.anthropic,
         maxTokens: 16000,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ...({ thinking: { type: 'enabled', budget_tokens: 10000 } } as any),
       });
     }
-    return new ChatAnthropic({ model: 'claude-sonnet-4-6', maxTokens: 8192 });
+    return new ChatAnthropic({ model: DEFAULT_MODELS.anthropic, maxTokens: 8192 });
   }
   const envGeminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (envGeminiKey) {
-    const geminiModel = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash';
+    const geminiModel = process.env.GEMINI_MODEL ?? DEFAULT_MODELS.gemini;
     console.log(`[llm] Using Gemini (env key) — ${geminiModel}`);
     return new ChatGoogleGenerativeAI({
       model: geminiModel,
@@ -206,12 +207,30 @@ export function buildEnvLLM(): BaseChatModel {
 
 // ── Singleton instances (env-based, used before DB is ready) ───────────────
 
+/**
+ * Models for the `llm` (fast) singleton — short, high-volume calls such as issue
+ * scoring, priority checks and story-point estimation. Haiku 4.5 is the fastest
+ * and cheapest option; override either variable to fall back to a larger model
+ * if a node needs more capability.
+ *
+ * The two ids differ by provider: the Anthropic API uses a `-YYYYMMDD` suffix,
+ * Vertex AI uses `@YYYYMMDD`. They are not interchangeable.
+ *
+ * The deep path (`llmDeep`, used by analyze/implement/review) is unaffected.
+ */
+const FAST_MODEL = FAST_MODELS.anthropic;
+const VERTEX_FAST_MODEL = FAST_MODELS.vertex;
+
+const FAST_MAX_TOKENS = 4096;
+
 const fastBase = (() => {
   if (process.env.ANTHROPIC_API_KEY) {
-    return new ChatAnthropic({ model: 'claude-sonnet-4-6', maxTokens: 4096 });
+    return new ChatAnthropic({ model: FAST_MODEL, maxTokens: FAST_MAX_TOKENS });
   }
   if (isVertexConfigured()) {
-    return buildVertexAnthropicLLM();
+    // Note: buildVertexAnthropicLLM() with no args would read VERTEX_CLAUDE_MODEL,
+    // which is the *deep* model. Pass the fast model explicitly.
+    return buildVertexAnthropicLLM({ model: VERTEX_FAST_MODEL, maxTokens: FAST_MAX_TOKENS });
   }
   const ollamaUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
   return new ChatOllama({
@@ -242,7 +261,14 @@ export function logTokenUsage(
   response: { response_metadata?: Record<string, unknown> },
 ): void {
   const meta = response.response_metadata as
-    | { usage?: { input_tokens?: number; output_tokens?: number; prompt_tokens?: number; completion_tokens?: number } }
+    | {
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          prompt_tokens?: number;
+          completion_tokens?: number;
+        };
+      }
     | undefined;
   const inp = meta?.usage?.input_tokens ?? meta?.usage?.prompt_tokens ?? 0;
   const out = meta?.usage?.output_tokens ?? meta?.usage?.completion_tokens ?? 0;

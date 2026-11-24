@@ -24,8 +24,29 @@ export interface RunEvent {
 export const agentBus = new EventEmitter();
 agentBus.setMaxListeners(100);
 
-// threadId → Set of connected WebSocket clients
+/**
+ * Reserved channel for run-list changes.
+ *
+ * Views that render a list of runs (Issues, Projects, Dashboard) subscribe here
+ * instead of polling `GET /api/runs` on a timer. Every run lifecycle event fans
+ * out one `runs_changed` notification on this channel.
+ */
+export const RUNS_CHANNEL = 'runs';
+
+// threadId (or RUNS_CHANNEL) → Set of connected WebSocket clients
 const subscribers = new Map<string, Set<WebSocket>>();
+
+function sendTo(channel: string, payload: string): void {
+  const clients = subscribers.get(channel);
+  if (!clients) return;
+  for (const ws of clients) {
+    try {
+      if (ws.readyState === 1 /* OPEN */) ws.send(payload);
+    } catch {
+      /* client disconnected */
+    }
+  }
+}
 
 function subscribe(threadId: string, ws: WebSocket): void {
   if (!subscribers.has(threadId)) {
@@ -38,22 +59,30 @@ function unsubscribe(threadId: string, ws: WebSocket): void {
   subscribers.get(threadId)?.delete(ws);
 }
 
+/**
+ * Notify run-list subscribers that something about the set of runs changed.
+ * Carries no run data — listeners reload the slice they care about.
+ */
+export function broadcastRunsChanged(threadId?: string): void {
+  sendTo(RUNS_CHANNEL, JSON.stringify({ type: 'runs_changed', threadId: threadId ?? '' }));
+}
+
 /** Called by the agent runner to push events to connected UI clients */
 export function emitRunEvent(threadId: string, event: RunEvent): void {
   agentBus.emit('run_event', threadId, event);
 
-  const clients = subscribers.get(threadId);
-  if (!clients) return;
+  sendTo(threadId, JSON.stringify(event));
 
-  const msg = JSON.stringify(event);
-  for (const ws of clients) {
-    try {
-      if (ws.readyState === 1 /* OPEN */) {
-        ws.send(msg);
-      }
-    } catch {
-      /* client disconnected */
-    }
+  // Only lifecycle transitions change the run list — per-node and log events
+  // would otherwise make every reader refetch dozens of times per run.
+  if (
+    event.type === 'run_started' ||
+    event.type === 'run_complete' ||
+    event.type === 'run_failed' ||
+    event.type === 'phase_start' ||
+    event.type === 'phase_complete'
+  ) {
+    broadcastRunsChanged(threadId);
   }
 }
 

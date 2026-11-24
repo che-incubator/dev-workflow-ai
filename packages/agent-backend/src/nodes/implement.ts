@@ -426,12 +426,14 @@ MANDATORY final response — JSON only, no markdown:
         let patch = '';
         // Try committed changes first
         try {
-          const { stdout } = await execAsync(
-            `git diff main...${state.branchName}`,
-            { cwd: repoLocal, timeout: 30_000 },
-          );
+          const { stdout } = await execAsync(`git diff main...${state.branchName}`, {
+            cwd: repoLocal,
+            timeout: 30_000,
+          });
           patch = stdout;
-        } catch { /* branch may not exist yet */ }
+        } catch {
+          /* branch may not exist yet */
+        }
 
         // Fall back to uncommitted changes (staged + unstaged)
         if (!patch.trim()) {
@@ -441,7 +443,9 @@ MANDATORY final response — JSON only, no markdown:
               timeout: 30_000,
             });
             patch = stdout;
-          } catch { /* non-fatal */ }
+          } catch {
+            /* non-fatal */
+          }
         }
 
         if (patch.trim()) {

@@ -197,7 +197,9 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
             { timeout: 30_000 },
           );
           patch = stdout;
-        } catch { /* branch may not exist yet */ }
+        } catch {
+          /* branch may not exist yet */
+        }
 
         if (!patch.trim()) {
           try {
@@ -206,7 +208,9 @@ export async function openPrNode(state: State): Promise<Partial<State>> {
               { timeout: 30_000 },
             );
             patch = stdout;
-          } catch { /* non-fatal */ }
+          } catch {
+            /* non-fatal */
+          }
         }
 
         if (patch.trim()) {

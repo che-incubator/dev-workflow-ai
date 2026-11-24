@@ -95,6 +95,36 @@ On server startup, `importKnowledge()` scans the knowledge directory for all `.m
 
 All content is upserted into the `contexts` table. Project registrations go into the `projects` table. Issue sources go into the `issue_sources` table.
 
+== Shared versus subproject content
+
+`loadContext()` selects rows `WHERE project_slug IN ('global', 'shared', <slug>)`, so anything
+under `shared/` is in scope for every subproject without being copied per project. Prefer one
+copy in `shared/` over seven near-identical files under `subprojects/`.
+
+Being in scope is not the same as being loaded. Every call site passes an explicit list of row
+names, so a skill in `shared/skills/` costs nothing until a node asks for it by name.
+
+[WARNING]
+====
+Never call `loadContext` with a bare `skills-*` wildcard. The filter supports prefix wildcards,
+and a wildcard over a large shared skill set would concatenate every skill body into one prompt.
+====
+
+Choosing between the two directories:
+
+`shared/rules/<name>.md`::
+A standing constraint that applies whether or not anyone asks for it — commit trailers, issue
+filtering, CVE batching. Seeded as `rules-<name>`.
+
+`shared/skills/<name>/SKILL.md`::
+A procedure the agent follows on request — how to upgrade a vulnerable dependency, how to write
+a PR test section. Seeded as `skills-<name>`.
+
+A subproject file of the same name does *not* replace the shared one. Both rows exist with
+different `project_slug` values, `loadContext` returns both, and the ordering is `global` →
+`shared` → project, so the subproject text lands last and appends. Use this as
+baseline-plus-specialization; do not rely on a subproject file hiding a shared one.
+
 == Adding a new subproject
 
 . Create `pg_seed/eclipse-che/subprojects/<name>/context.md` with the YAML frontmatter fields shown above.

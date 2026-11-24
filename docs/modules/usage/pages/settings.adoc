@@ -40,16 +40,35 @@ Each provider row shows:
 
 * *Provider* — name and active badge
 * *Credential* — whether the required API key or project ID is configured
-* *Model* — the model identifier (e.g., `claude-sonnet-4-6@default`)
+* *Model* — the model identifier (e.g., `claude-haiku-4-5@20251001`)
 * *Region / URL* — Vertex AI region or Ollama base URL
 
 Use the *Test selected provider* section to verify the active provider works before saving. Type a prompt and click *Send* to see the model's response.
 
-Click *+ Add provider* to configure a new backend (Vertex AI, Gemini, or Ollama).
+The model picker lists each provider's known models with a short capability hint — Haiku 4.5 is
+the default and is marked _Fastest for quick answers_. Any other id can be typed in directly.
+See xref:getting-started:configuration.adoc#model-selection[Model selection] for the environment
+variables that seed these values and for the fast/deep tier split.
 
+IMPORTANT: A provider's *Model* is what the agent nodes actually run on, not just a display
+value. Changing it here changes which model writes code and reviews diffs.
+
+=== Adding a provider
+
+Click *+ Add provider* to configure a new backend. The dialog lists only providers that are not
+configured yet — a provider already in the list above is changed with *Edit*, not re-added. The
+providers already present are named in the dialog so it is clear why one is missing.
+
+Selecting a provider type resets the model field to that provider's default.
+
+[[daily-autorun]]
 == Daily autorun
 
 Automatically pick and run one issue at scheduled times on selected days of the week.
+
+NOTE: Autorun only considers issues that have story points. Unestimated issues stay in the
+issues table and can still be run by hand with *Force priority* — see
+xref:issues.adoc#story-points-and-autorun[Story points and autorun].
 
 .Daily autorun scheduler
 image::settings__Daily_Autorun.png[Daily autorun — enabled with schedule and active days]

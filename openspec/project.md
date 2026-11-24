@@ -54,10 +54,14 @@ The bot runs as a web service with a backend (Fastify + LangGraph + PostgreSQL/P
 
 ### 7. Scheduler & Auto-run
 
+- Only issues with story points are eligible; unestimated issues remain in the list and can be
+  started manually with Force priority
 - Daily autonomous loop via cron scheduler
 - Continuously cycle: pick → analyze → implement → review → PR
 - Respect repository locks (per-repo mutex for concurrent safety)
-- Configurable LLM model and provider (Vertex AI, Claude API, Ollama)
+- Configurable LLM model and provider (Vertex AI, Claude API, Ollama). Two tiers: a fast model
+  for scoring and triage, a deep model for analyze/implement/review. Defaults are centralised in
+  `packages/agent-backend/src/llm/defaults.ts` and default to Claude Haiku 4.5
 
 ## Architecture
 
@@ -148,15 +152,33 @@ pg_seed/eclipse-che/
 
 - `GET /swagger` — Swagger UI and OpenAPI spec
 
+### Health
+
+- `GET /health` — `{ status, ts, dbInstanceId }`. `dbInstanceId` is a UUID generated once per
+  database and stored in `settings`; it changes whenever the database is recreated. Clients use
+  it to discard browser-local state referring to rows that no longer exist.
+
+### WebSocket
+
+- `GET /ws` — two subscription kinds:
+  - `{"subscribe": "<threadId>"}` — that run's `node_start`, `node_complete`, `log`,
+    `run_complete`, `run_failed` events
+  - `{"subscribe": "runs"}` — `runs_changed` notifications on run lifecycle transitions, used by
+    run-list views instead of polling `GET /api/runs`
+
 ## Database Schema
 
 ### Tables
 
-- `runs` — execution records (status, branch, PR URL, logs)
-- `projects` — target GitHub projects
-- `issues` — cached issue metadata
-- `sources` — issue source definitions
-- `settings` — global configuration
+- `agent_runs` — execution records (status, branch, PR URL, logs)
+- `run_events` — per-run node and log events
+- `findings` — review findings per run
+- `projects` — target subprojects, registered from `context.md` frontmatter
+- `issues` — cached issue metadata, including `story_points` (autorun requires it)
+- `issue_sources` — issue source definitions, including `last_error` (empty when healthy)
+- `issue_plans` — short implementation plan per issue
+- `settings` — global configuration, including `db_instance_id`
+- `llm_providers` — configured LLM backends and their active model
 
 ### Migrations
 
@@ -168,6 +190,10 @@ Located in `packages/agent-backend/src/db/migrations/`, applied automatically on
 - **LLM API keys**: Stored securely in database (encrypted at rest in Postgres, in-memory only)
 - **Repository lock**: Per-repo mutex prevents concurrent runs on the same project
 - **Dependency pinning**: All transitive CVE-flagged dependencies pinned via `resolutions`
+- **Credential verification**: Jira Cloud answers issue searches for anonymous callers on
+  publicly browsable projects, so an invalid token returns HTTP 200 with an empty result rather
+  than a 401. Jira sync verifies against `/rest/api/3/myself` before trusting an empty search.
+  Sync failures are recorded in `issue_sources.last_error` and surfaced in the UI
 
 ## Development
 

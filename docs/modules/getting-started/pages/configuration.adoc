@@ -73,6 +73,53 @@ Configure at least one LLM backend. The agent uses the active provider selected 
 | _(unset)_
 |===
 
+[[model-selection]]
+== Model selection
+
+The agent uses two model tiers. The *deep* tier runs analyze, implement, and review; the *fast*
+tier runs short, high-volume calls such as issue scoring, priority checks, and story-point
+estimation.
+
+Defaults live in one place — `packages/agent-backend/src/llm/defaults.ts` — rather than being
+repeated at each call site. Both tiers default to Claude Haiku 4.5.
+
+IMPORTANT: Model ids are not interchangeable between providers. The Anthropic API uses a
+`-YYYYMMDD` suffix (`claude-haiku-4-5-20251001`); Vertex AI uses `@YYYYMMDD`
+(`claude-haiku-4-5@20251001`).
+
+|===
+| Variable | Description | Default
+
+| `VERTEX_CLAUDE_MODEL`
+| Deep-tier model for Vertex AI. Also seeds the Vertex provider row on first start.
+| `claude-haiku-4-5@20251001`
+
+| `VERTEX_FAST_MODEL`
+| Fast-tier model for Vertex AI.
+| `claude-haiku-4-5@20251001`
+
+| `ANTHROPIC_FAST_MODEL`
+| Fast-tier model for the direct Anthropic API.
+| `claude-haiku-4-5-20251001`
+
+| `GEMINI_MODEL`
+| Model for the Gemini provider.
+| `gemini-3.6-flash`
+|===
+
+To run code generation on a larger model while keeping the cheap calls on Haiku, pin the deep
+tier only:
+
+[source,bash]
+----
+VERTEX_CLAUDE_MODEL=claude-sonnet-4-6@default
+----
+
+NOTE: A provider row stores its own `model`, editable in *Settings → AI Providers*. These
+variables seed that row the first time the database is created; afterwards the stored value
+wins. With an in-memory PGlite (no `PGLITE_DATA_DIR`) the database is recreated on every
+restart, so the variables apply every time.
+
 == Example `.env` file
 
 [source,bash]

@@ -34,18 +34,35 @@ async function projectForJiraKey(key: string): Promise<string | null> {
 let lastTriggeredAt: string | null = null;
 
 async function triggerAutorun(): Promise<void> {
+  // Autorun only picks up issues that carry story points: an unestimated issue
+  // has not been sized, so the budget check downstream is meaningless and the
+  // agent would be working blind. Such issues stay visible in the Issues list
+  // and can still be run by hand with "Force priority".
   const { rows } = await db.query<{ url: string; title: string }>(
     `SELECT si.url, si.title
        FROM issues si
        LEFT JOIN agent_runs r ON r.issue_url = si.url AND r.status = 'running'
       WHERE si.status = 'open' AND r.id IS NULL
+        AND si.story_points IS NOT NULL AND si.story_points > 0
       ORDER BY si.score DESC
       LIMIT 1`,
   );
 
   const issue = rows[0];
   if (!issue) {
-    console.log('[autorun] No open issues available — skipping scheduled run');
+    const { rows: unsized } = await db.query<{ n: string }>(
+      `SELECT COUNT(*) AS n
+         FROM issues si
+         LEFT JOIN agent_runs r ON r.issue_url = si.url AND r.status = 'running'
+        WHERE si.status = 'open' AND r.id IS NULL
+          AND (si.story_points IS NULL OR si.story_points = 0)`,
+    );
+    const skipped = parseInt(unsized[0]?.n ?? '0', 10);
+    console.log(
+      skipped > 0
+        ? `[autorun] No estimated open issues — skipping scheduled run (${skipped} open issue(s) have no story points; run them manually with Force priority)`
+        : '[autorun] No open issues available — skipping scheduled run',
+    );
     return;
   }
 
@@ -122,7 +139,10 @@ export function startAutorunScheduler(): void {
       if (!times.includes(hhmm)) return;
 
       const daysStr = await getSetting('autorunDays', '1,2,3,4,5');
-      const activeDays = daysStr.split(',').map(d => parseInt(d.trim(), 10)).filter(d => !isNaN(d));
+      const activeDays = daysStr
+        .split(',')
+        .map(d => parseInt(d.trim(), 10))
+        .filter(d => !isNaN(d));
       if (!activeDays.includes(now.getDay())) return;
 
       lastTriggeredAt = hhmm;

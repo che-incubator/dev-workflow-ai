@@ -20,8 +20,10 @@ dev-workflow-ai/
 │   │   ├── api/routes/              ← REST API (runs, projects, issues, sources, settings)
 │   │   ├── db/                      ← migrations, schema, PGlite client
 │   │   ├── llm/                     ← LLM client (Vertex AI, Claude, Gemini, Ollama)
+│   │   │   └── defaults.ts          ← DEFAULT_MODELS / FAST_MODELS — the only place model ids live
 │   │   ├── nodes/                   ← agent nodes (analyze, implement, review, openPr, …)
 │   │   ├── scheduler/               ← daily autorun scheduler
+│   │   ├── api/ws/agentStream.ts    ← WebSocket: per-run channel + "runs" run-list channel
 │   │   └── utils/                   ← repoLock (per-repo mutex)
 │   └── agent-frontend/src/          ← React + PatternFly 6 + Redux Toolkit (webpack)
 │       ├── containers/              ← Redux-connected route wrappers
@@ -107,6 +109,53 @@ controller.devfile.io/mount-as: env
 | devworkspace-generator | devfile/devworkspace-generator | /projects/repos/devworkspace-generator | TypeScript |
 | devworkspace-operator | devfile/devworkspace-operator | /projects/repos/devfile/devworkspace-operator | Go, Operator SDK |
 | dash-licenses | che-incubator/dash-licenses | /projects/repos/che-incubator/dash-licenses | Java, Maven |
+
+## Invariants — easy to get wrong
+
+Each of these has already caused a bug. Read before touching the area.
+
+### Knowledge packs
+
+- `loadContext()` selects `WHERE project_slug IN ('global', 'shared', <slug>)`. Content under
+  `shared/` reaches every subproject — put one copy there rather than seven under `subprojects/`.
+- **Never call `loadContext` with a bare `skills-*` wildcard.** The filter supports prefix
+  wildcards and would concatenate every skill body into one prompt.
+- `shared/rules/<name>.md` → `rules-<name>`: a standing constraint, applied unconditionally.
+  `shared/skills/<name>/SKILL.md` → `skills-<name>`: a procedure, loaded only when a node names it.
+- A subproject file does **not** override a shared file of the same name. Both rows are returned
+  and concatenated, ordered `global` → `shared` → project, so the subproject text appends last.
+- `.claude/skills/` is a mirror of `pg_seed/eclipse-che/shared/skills/`, maintained by hand and
+  prone to drift. Change `pg_seed/` first.
+
+### LLM models
+
+- Model ids live only in `packages/agent-backend/src/llm/defaults.ts`. Do not reintroduce string
+  literals at call sites.
+- Anthropic API ids use `-YYYYMMDD`; Vertex AI ids use `@YYYYMMDD`. They are not interchangeable.
+- Two tiers: `llm` (fast — scoring, priority, story points) and `llmDeep` (analyze, implement,
+  review). `buildVertexAnthropicLLM()` with no argument reads the *deep* model, so the fast path
+  must pass its model explicitly.
+- A provider row's `model` is what the nodes actually run on, not a display value.
+
+### Live updates
+
+- The UI does not poll for run state. Subscribe to the `runs` WebSocket channel and reload on
+  `runs_changed`. Do not add `setInterval` polling of `/api/runs`.
+- Broadcast only on lifecycle transitions, never per log line.
+
+### Issue sources
+
+- A failed sync must record `last_error` on the source. Console-only logging leaves the UI showing
+  "Never" with no explanation.
+- Do not set `last_synced_at` on a failed attempt — a failing source must not look up to date.
+- Jira Cloud answers issue searches for **anonymous** callers on publicly browsable projects. A
+  bad token yields HTTP 200 with an empty list, not a 401. Always verify credentials against
+  `/rest/api/3/myself` before trusting an empty search result.
+
+### Autorun
+
+- Autorun only picks issues with story points. Unestimated issues stay in the list and remain
+  runnable by hand via *Force priority*.
 
 ## Red Hat Compliance
 

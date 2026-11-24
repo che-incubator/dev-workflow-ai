@@ -10,6 +10,8 @@
  *   Red Hat, Inc. - initial API and implementation
  */
 
+import { randomUUID } from 'node:crypto';
+
 import { db } from './client.js';
 
 const MIGRATIONS = [
@@ -141,6 +143,9 @@ const MIGRATIONS = [
 
   `ALTER TABLE issues ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`,
 
+  // Last sync failure for a source, surfaced in the Issues UI. Empty = healthy.
+  `ALTER TABLE issue_sources ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT ''`,
+
   `CREATE TABLE IF NOT EXISTS issue_plans (
     id SERIAL PRIMARY KEY,
     issue_id INT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
@@ -151,9 +156,33 @@ const MIGRATIONS = [
   )`,
 ];
 
+/**
+ * Identifies this database instance for the lifetime of its data.
+ *
+ * Generated once, on the first migration run against an empty database, and
+ * persisted in `settings`. A database that survives a restart (DATABASE_URL, or
+ * PGlite with PGLITE_DATA_DIR set) keeps the same id; an in-memory PGlite gets a
+ * new one on every boot.
+ *
+ * Clients use it to discard local state that refers to rows which no longer
+ * exist — see the Issue Picker queue in the frontend.
+ */
+export async function ensureDbInstanceId(): Promise<string> {
+  // DO UPDATE (not DO NOTHING) so RETURNING yields the existing row on conflict.
+  const { rows } = await db.query<{ value: string }>(
+    `INSERT INTO settings (key, value)
+     VALUES ('db_instance_id', $1)
+     ON CONFLICT (key) DO UPDATE SET key = EXCLUDED.key
+     RETURNING value`,
+    [randomUUID()],
+  );
+  return rows[0].value;
+}
+
 export async function runMigrations(): Promise<void> {
   for (const sql of MIGRATIONS) {
     await db.query(sql);
   }
-  console.log('[migrations] All tables ready');
+  const instanceId = await ensureDbInstanceId();
+  console.log(`[migrations] All tables ready (db instance ${instanceId.slice(0, 8)})`);
 }
